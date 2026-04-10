@@ -20,6 +20,7 @@ export interface PuzzleState {
   constraints: UserConstraint[];
   pendingCells: CellPosition[];
   pendingCageSum: number | null;
+  error: string | null;
 }
 
 export type PuzzleAction =
@@ -35,6 +36,7 @@ export type PuzzleAction =
   | { type: 'REMOVE_CONSTRAINT'; id: string }
   | { type: 'SET_STATUS'; status: PuzzleStatus }
   | { type: 'SET_GRID'; grid: GridSnapshot }
+  | { type: 'SET_ERROR'; error: string | null }
   | { type: 'RESET' };
 
 export function createEmptyGrid(size: number): GridSnapshot {
@@ -62,6 +64,7 @@ export const initialPuzzleState: PuzzleState = {
   constraints: [],
   pendingCells: [],
   pendingCageSum: null,
+  error: null,
 };
 
 let constraintIdCounter = 0;
@@ -133,6 +136,8 @@ export function puzzleReducer(state: PuzzleState, action: PuzzleAction): PuzzleS
       return { ...state, status: action.status };
     case 'SET_GRID':
       return { ...state, grid: action.grid };
+    case 'SET_ERROR':
+      return { ...state, error: action.error };
     case 'RESET':
       return {
         ...initialPuzzleState,

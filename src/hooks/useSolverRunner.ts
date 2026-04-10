@@ -46,6 +46,15 @@ export function useSolverRunner() {
       addUserConstraint(constraintSet, uc);
     }
 
+    // Validate grid before solving
+    const violations = constraintSet.validateAll(grid);
+    if (violations.length > 0) {
+      const messages = violations.map(v => v.message);
+      puzzleDispatch({ type: 'SET_ERROR', error: messages.join('; ') });
+      return;
+    }
+
+    puzzleDispatch({ type: 'SET_ERROR', error: null });
     const snapshot = grid.snapshot();
     puzzleDispatch({ type: 'SELECT_CELL', pos: null });
     puzzleDispatch({ type: 'SET_STATUS', status: 'solving' });

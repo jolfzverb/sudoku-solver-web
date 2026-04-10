@@ -150,6 +150,13 @@ export function SetupPanel() {
         </div>
       )}
 
+      {/* Error display */}
+      {puzzle.error && (
+        <div className="setup-section error-message">
+          {puzzle.error}
+        </div>
+      )}
+
       {/* Solve controls */}
       <div className="setup-section">
         <div className="button-row">
