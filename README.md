@@ -1,50 +1,93 @@
-# React + TypeScript + Vite
+# Sudoku Solver
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A web application for solving Sudoku puzzles using logical deduction — no backtracking. Supports multiple variants (Classic, Diagonal, Killer, Thermometer, Arrow, Jigsaw) with heuristic techniques and step-by-step visualization.
 
-Currently, two official plugins are available:
+## Quick Start
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
-
-- Configure the top-level `parserOptions` property like this:
-
-```js
-export default tseslint.config({
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```bash
+make install   # npm install
+make dev       # dev server at http://localhost:5173
 ```
 
-- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
-- Optionally add `...tseslint.configs.stylisticTypeChecked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
+## Features
 
-```js
-// eslint.config.js
-import react from 'eslint-plugin-react'
+- **Interactive grid editor** — click to place digits, draw thermometers, killer cages, and arrows
+- **Step-by-step solving** — play/pause, step forward/backward, scrub through solution
+- **No backtracking** — pure logical deduction with generator-based architecture
+- **Highlighting** — color-coded visualization of each deduction step
+- **Difficulty rating** — classifies puzzles by the hardest technique required
 
-export default tseslint.config({
-  // Set the react version
-  settings: { react: { version: '18.3' } },
-  plugins: {
-    // Add the react plugin
-    react,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended rules
-    ...react.configs.recommended.rules,
-    ...react.configs['jsx-runtime'].rules,
-  },
-})
+## Project Structure
+
 ```
+src/                          # React frontend
+  components/
+    grid/GridView.tsx         # SVG grid with constraint overlays
+    controls/SetupPanel.tsx   # Variant/size/constraint builder
+    controls/PlaybackControls # Step-through playback
+    report/ReportPanel.tsx    # Solving statistics
+  state/                      # React Context + useReducer
+  hooks/                      # useSolverRunner, usePlayback, useHighlight
+
+packages/solver-engine/src/   # Pure TypeScript solver (no dependencies)
+  model/                      # Grid, Cell, CandidateSet
+  constraint/                 # RegionConstraint, ThermometerConstraint,
+                              # CageSumConstraint, ArrowSumConstraint
+  heuristic/techniques/       # 16 solving techniques
+  variant/                    # 6 puzzle variant definitions
+  solver/                     # Generator-based Solver
+```
+
+## Supported Variants
+
+| Variant | Sizes | Description |
+|---------|-------|-------------|
+| Classic | 4, 6, 9, 16 | Standard Sudoku |
+| Diagonal | 4, 9, 16 | + both main diagonals |
+| Killer | 9 | + cage sum constraints |
+| Thermometer | 9 | + strictly increasing paths |
+| Arrow | 9 | + circle = sum of shaft |
+| Jigsaw | 9 | Irregular box shapes |
+
+## Solving Techniques
+
+**Basic:** Naked Single, Hidden Single
+
+**Intermediate:** Constraint Elimination, Naked Pair, Hidden Pair, Pointing Pair, Box Line Reduction
+
+**Advanced:** Hidden Triple, Y-Wing, X-Wing, Swordfish, Jellyfish, Thermo Fork
+
+**Expert:** Thermo Fish, Thermo Forcing, Parallel Thermos, Constraint Claiming
+
+The solver applies heuristics in priority order, restarting from the cheapest after each successful step.
+
+## How the Solver Works
+
+The solver is a generator that yields `SolveStep` objects:
+
+```typescript
+const solver = new Solver(grid, constraints);
+for (const step of solver.solveIterative()) {
+  // step contains: placements, eliminations, highlights, description
+}
+```
+
+Each step describes a single logical deduction — a placement or candidate elimination — with metadata for visualization. The frontend consumes these steps one at a time for interactive playback.
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `make install` | Install dependencies |
+| `make dev` | Start dev server with HMR |
+| `make build` | Type-check + production build |
+| `make lint` | Run ESLint |
+| `make preview` | Preview production build |
+| `npm test` | Run test suite (Vitest) |
+
+## Tech Stack
+
+- **React 18** + **TypeScript 5.6** + **Vite 5**
+- **Vitest** for testing (72 heuristic tests)
+- Monorepo: frontend app + `@sudoku/solver-engine` package
+- SVG-based grid rendering with constraint overlays
