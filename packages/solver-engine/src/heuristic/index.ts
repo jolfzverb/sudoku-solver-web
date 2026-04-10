@@ -1,0 +1,39 @@
+export type { Heuristic, SolveStep, HighlightGroup, DifficultyTier } from './types';
+export { HeuristicRegistry } from './HeuristicRegistry';
+export * from './techniques';
+
+import { HeuristicRegistry } from './HeuristicRegistry';
+import { NakedSingle } from './techniques/NakedSingle';
+import { HiddenSingle } from './techniques/HiddenSingle';
+import { ConstraintElimination } from './techniques/ConstraintElimination';
+import { NakedPair } from './techniques/NakedPair';
+import { HiddenPair } from './techniques/HiddenPair';
+import { HiddenTriple } from './techniques/HiddenTriple';
+import { PointingPair } from './techniques/PointingPair';
+import { BoxLineReduction } from './techniques/BoxLineReduction';
+import { XWing, Swordfish, Jellyfish } from './techniques/Fish';
+import { ThermoFork } from './techniques/ThermoFork';
+import { ThermoFish } from './techniques/ThermoFish';
+import { ThermoForcing } from './techniques/ThermoForcing';
+import { YWing } from './techniques/YWing';
+import { ParallelThermos } from './techniques/ParallelThermos';
+import { ConstraintClaiming } from './techniques/ConstraintClaiming';
+
+// Register all built-in heuristics in priority order
+HeuristicRegistry.register(NakedSingle);
+HeuristicRegistry.register(HiddenSingle);
+HeuristicRegistry.register(ConstraintElimination);
+HeuristicRegistry.register(NakedPair);
+HeuristicRegistry.register(HiddenPair);
+HeuristicRegistry.register(HiddenTriple);
+HeuristicRegistry.register(PointingPair);
+HeuristicRegistry.register(BoxLineReduction);
+HeuristicRegistry.register(YWing);
+HeuristicRegistry.register(XWing);
+HeuristicRegistry.register(Swordfish);
+HeuristicRegistry.register(Jellyfish);
+HeuristicRegistry.register(ThermoFork);
+HeuristicRegistry.register(ThermoFish);
+HeuristicRegistry.register(ThermoForcing);
+HeuristicRegistry.register(ParallelThermos);
+HeuristicRegistry.register(ConstraintClaiming);
