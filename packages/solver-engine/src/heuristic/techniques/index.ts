@@ -13,3 +13,4 @@ export { ThermoForcing } from './ThermoForcing';
 export { YWing } from './YWing';
 export { ParallelThermos } from './ParallelThermos';
 export { ConstraintClaiming } from './ConstraintClaiming';
+export { TurbotFish } from './TurbotFish';

@@ -15,6 +15,7 @@ import { ThermoForcing } from '../heuristic/techniques/ThermoForcing';
 import { YWing } from '../heuristic/techniques/YWing';
 import { ParallelThermos } from '../heuristic/techniques/ParallelThermos';
 import { ConstraintClaiming } from '../heuristic/techniques/ConstraintClaiming';
+import { TurbotFish } from '../heuristic/techniques/TurbotFish';
 import { ConstraintSet } from '../constraint/ConstraintSet';
 import { ThermometerConstraint } from '../constraint/ThermometerConstraint';
 import { CageSumConstraint } from '../constraint/CageSumConstraint';
@@ -1759,6 +1760,123 @@ describe('ConstraintClaiming', () => {
       expect(hasElimination(step!.eliminations, r, c, 9)).toBe(true);
       expect(hasElimination(step!.eliminations, r, c, 1)).toBe(false);
     }
+  });
+});
+
+// ─── TurbotFish ────────────────────────────────────────────────
+
+describe('TurbotFish', () => {
+  it('skyscraper: two columns connected by shared row', () => {
+    // Digit 1: col 0 in {r0, r5}, col 6 in {r0, r3}
+    // Chain: r5c0 ==col0== r0c0 --row0-- r0c6 ==col6== r3c6
+    // Either r5c0=1 or r3c6=1 → eliminate 1 from cells seeing both.
+    // Target r3c2: sees r5c0 (box 1,0) and r3c6 (row 3).
+    // Note: target must NOT be in col 0 or col 6 to preserve conjugate pairs.
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    specs['0,0'] = { candidates: [1, 2] };
+    specs['5,0'] = { candidates: [1, 3] };
+    specs['0,6'] = { candidates: [1, 4] };
+    specs['3,6'] = { candidates: [1, 5] };
+    // Target: r3c2 sees r5c0 (box-1-0) and r3c6 (row 3)
+    specs['3,2'] = { candidates: [1, 6, 7] };
+    // Break row-0 strong link (add third cell with 1 in row 0)
+    specs['0,3'] = { candidates: [1, 8] };
+    // Break row-3 strong link (add third cell with 1 in row 3)
+    specs['3,4'] = { candidates: [1, 9] };
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    const step = TurbotFish.apply(grid, cs);
+
+    expect(step).not.toBeNull();
+    expect(step!.heuristicId).toBe('turbot-fish');
+    expect(hasElimination(step!.eliminations, 3, 2, 1)).toBe(true);
+    expect(hasElimination(step!.eliminations, 5, 0, 1)).toBe(false);
+    expect(hasElimination(step!.eliminations, 3, 6, 1)).toBe(false);
+  });
+
+  it('2-string kite: col + box connected through row', () => {
+    // Only 2 strong links: col-6(r2c6, r4c6) and box-1-0(r4c2, r5c0)
+    // Weak link: r4c6 and r4c2 share row 4
+    // Chain: r2c6 ==col6== r4c6 --row4-- r4c2 ==box(1,0)== r5c0
+    // Target r2c0: sees r2c6 (row 2) and r5c0 (col 0)
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    specs['2,6'] = { candidates: [1, 5] };
+    specs['4,6'] = { candidates: [1, 8] };
+    specs['4,2'] = { candidates: [1, 3] };
+    specs['5,0'] = { candidates: [1, 7] };
+    specs['2,0'] = { candidates: [1, 4, 9] };
+    // Break col-0 (r2c0, r5c0 → add r7c0), row-2, row-4
+    specs['7,0'] = { candidates: [1, 6] };
+    specs['2,3'] = { candidates: [1, 2] };
+    specs['4,4'] = { candidates: [1, 9] };
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    const step = TurbotFish.apply(grid, cs);
+
+    expect(step).not.toBeNull();
+    expect(hasElimination(step!.eliminations, 2, 0, 1)).toBe(true);
+  });
+
+  it('6-node X-Chain: 3 strong links + 2 weak links', () => {
+    // Digit 1: col 0 in {r0, r6}, col 3 in {r3, r6}, col 7 in {r0, r5}
+    // No 4-node chain produces eliminations (targets have no candidate 1).
+    // 6-node chain: r5c7 ==col7== r0c7 --row0-- r0c0 ==col0== r6c0 --row6-- r6c3 ==col3== r3c3
+    // Target: r5c3 sees r5c7 (row 5) and r3c3 (col 3)
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    specs['0,0'] = { candidates: [1, 2] };
+    specs['6,0'] = { candidates: [1, 3] };
+    specs['3,3'] = { candidates: [1, 4] };
+    specs['6,3'] = { candidates: [1, 5] };
+    specs['0,7'] = { candidates: [1, 6] };
+    specs['5,7'] = { candidates: [1, 7] };
+    // Target
+    specs['5,3'] = { candidates: [1, 8, 9] };
+    // Break row strong links (add 3rd cell with 1 in each row)
+    specs['0,4'] = { candidates: [1, 2] };
+    specs['5,1'] = { candidates: [1, 3] };
+    specs['6,8'] = { candidates: [1, 4] };
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    const step = TurbotFish.apply(grid, cs);
+
+    expect(step).not.toBeNull();
+    // Chain: r6c0==col0==r0c0--r0c7==col7==r5c7--r5c3==box(1,1)==r3c3
+    // Endpoints: r6c0, r3c3. r6c3 sees both (row 6 + col 3) → eliminate
+    expect(hasElimination(step!.eliminations, 6, 3, 1)).toBe(true);
+    // Chain nodes and endpoints should NOT be eliminated
+    expect(hasElimination(step!.eliminations, 6, 0, 1)).toBe(false);
+    expect(hasElimination(step!.eliminations, 3, 3, 1)).toBe(false);
+    expect(hasElimination(step!.eliminations, 5, 3, 1)).toBe(false);
+  });
+
+  it('returns null when no conjugate pairs exist', () => {
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    expect(TurbotFish.apply(grid, cs)).toBeNull();
   });
 });
 

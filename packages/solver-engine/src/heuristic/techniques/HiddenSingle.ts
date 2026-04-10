@@ -2,19 +2,7 @@ import { Grid } from '../../model/Grid';
 import { ConstraintSet } from '../../constraint/ConstraintSet';
 import { Heuristic, SolveStep } from '../types';
 import { CellPosition } from '../../model/types';
-
-function formatRegion(id: string): string {
-  const m = id.match(/^(row|col|box)-(\d+)(-(\d+))?$/);
-  if (!m) return id;
-  const type = m[1];
-  const n1 = parseInt(m[2]) + 1;
-  if (type === 'box' && m[4] !== undefined) {
-    const n2 = parseInt(m[4]) + 1;
-    return `box ${n1},${n2}`;
-  }
-  const label = type === 'col' ? 'column' : type;
-  return `${label} ${n1}`;
-}
+import { formatRegion } from '../utils';
 
 export const HiddenSingle: Heuristic = {
   id: 'hidden-single',
