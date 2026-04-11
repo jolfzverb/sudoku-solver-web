@@ -28,7 +28,7 @@ function GridArea() {
       dispatch({ type: 'SELECT_CELL', pos });
       // Focus hidden input to raise mobile keyboard (only if not already focused)
       if (isDigitMode && document.activeElement !== hiddenInputRef.current) {
-        setTimeout(() => hiddenInputRef.current?.focus(), 0);
+        hiddenInputRef.current?.focus();
       }
     }
   }, [dispatch, puzzle.status, puzzle.editMode, isDigitMode]);

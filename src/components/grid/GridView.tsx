@@ -69,6 +69,7 @@ export function GridView({
             stroke="#ccc"
             strokeWidth={THIN}
             style={{ cursor: 'pointer' }}
+            onMouseDown={e => e.preventDefault()}
             onClick={() => onCellClick?.(cell.position)}
           />
         );
