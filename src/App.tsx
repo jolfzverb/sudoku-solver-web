@@ -19,17 +19,19 @@ function GridArea() {
 
   const hiddenInputRef = useRef<HTMLInputElement>(null);
 
+  const isDigitMode = puzzle.status === 'setup' && puzzle.editMode === 'digit';
+
   const handleCellClick = useCallback((pos: CellPosition) => {
     if (puzzle.status === 'setup' && puzzle.editMode !== 'digit') {
       dispatch({ type: 'ADD_PENDING_CELL', pos });
     } else {
       dispatch({ type: 'SELECT_CELL', pos });
-      // Focus hidden input to raise mobile keyboard in digit mode
-      if (puzzle.status === 'setup' && puzzle.editMode === 'digit') {
+      // Focus hidden input to raise mobile keyboard (only if not already focused)
+      if (isDigitMode && document.activeElement !== hiddenInputRef.current) {
         setTimeout(() => hiddenInputRef.current?.focus(), 0);
       }
     }
-  }, [dispatch, puzzle.status, puzzle.editMode]);
+  }, [dispatch, puzzle.status, puzzle.editMode, isDigitMode]);
 
   // Handle input from hidden element (mobile keyboard)
   const handleHiddenInput = useCallback((e: React.FormEvent<HTMLInputElement>) => {
@@ -67,6 +69,15 @@ function GridArea() {
       dispatch({ type: 'SELECT_CELL', pos: { row: newRow, col: newCol } });
     }
   }, [dispatch, puzzle.selectedCell, puzzle.size]);
+
+  // Blur hidden input when leaving digit mode or deselecting
+  useEffect(() => {
+    if (!isDigitMode || !puzzle.selectedCell) {
+      if (document.activeElement === hiddenInputRef.current) {
+        hiddenInputRef.current?.blur();
+      }
+    }
+  }, [isDigitMode, puzzle.selectedCell]);
 
   // Keyboard handler for desktop (physical keyboard)
   useEffect(() => {
@@ -110,26 +121,26 @@ function GridArea() {
 
   return (
     <>
-      {/* Hidden input to trigger mobile keyboard when a cell is selected */}
-      {puzzle.status === 'setup' && puzzle.editMode === 'digit' && puzzle.selectedCell && (
-        <input
-          ref={hiddenInputRef}
-          inputMode="numeric"
-          pattern="[0-9]*"
-          autoComplete="off"
-          onInput={handleHiddenInput}
-          onKeyDown={handleHiddenKeyDown}
-          style={{
-            position: 'absolute',
-            opacity: 0,
-            width: 1,
-            height: 1,
-            padding: 0,
-            border: 'none',
-            pointerEvents: 'none',
-          }}
-        />
-      )}
+      {/* Hidden input kept in DOM during digit mode to maintain mobile keyboard */}
+      <input
+        ref={hiddenInputRef}
+        inputMode="numeric"
+        pattern="[0-9]*"
+        autoComplete="off"
+        aria-hidden="true"
+        tabIndex={-1}
+        onInput={handleHiddenInput}
+        onKeyDown={handleHiddenKeyDown}
+        style={{
+          position: 'absolute',
+          opacity: 0,
+          width: 1,
+          height: 1,
+          padding: 0,
+          border: 'none',
+          pointerEvents: 'none',
+        }}
+      />
       <GridView
         grid={grid}
         size={grid.size}
