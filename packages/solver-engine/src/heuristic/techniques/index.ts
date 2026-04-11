@@ -13,4 +13,7 @@ export { ThermoForcing } from './ThermoForcing';
 export { YWing } from './YWing';
 export { ParallelThermos } from './ParallelThermos';
 export { ConstraintClaiming } from './ConstraintClaiming';
+export { CageRegionInteraction } from './CageRegionInteraction';
+export { CageComboReduction } from './CageComboReduction';
+export { CageForcing } from './CageForcing';
 export { TurbotFish } from './TurbotFish';

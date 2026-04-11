@@ -37,6 +37,7 @@ export type PuzzleAction =
   | { type: 'SET_STATUS'; status: PuzzleStatus }
   | { type: 'SET_GRID'; grid: GridSnapshot }
   | { type: 'SET_ERROR'; error: string | null }
+  | { type: 'LOAD_PUZZLE'; variant: string; size: number; grid: GridSnapshot; constraints: UserConstraint[] }
   | { type: 'RESET' };
 
 export function createEmptyGrid(size: number): GridSnapshot {
@@ -138,6 +139,14 @@ export function puzzleReducer(state: PuzzleState, action: PuzzleAction): PuzzleS
       return { ...state, grid: action.grid };
     case 'SET_ERROR':
       return { ...state, error: action.error };
+    case 'LOAD_PUZZLE':
+      return {
+        ...initialPuzzleState,
+        variant: action.variant,
+        size: action.size,
+        grid: action.grid,
+        constraints: action.constraints,
+      };
     case 'RESET':
       return {
         ...initialPuzzleState,

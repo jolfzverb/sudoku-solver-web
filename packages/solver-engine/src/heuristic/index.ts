@@ -19,11 +19,16 @@ import { YWing } from './techniques/YWing';
 import { ParallelThermos } from './techniques/ParallelThermos';
 import { ConstraintClaiming } from './techniques/ConstraintClaiming';
 import { TurbotFish } from './techniques/TurbotFish';
+import { CageRegionInteraction } from './techniques/CageRegionInteraction';
+import { CageComboReduction } from './techniques/CageComboReduction';
+import { CageForcing } from './techniques/CageForcing';
 
 // Register all built-in heuristics in priority order
 HeuristicRegistry.register(NakedSingle);
 HeuristicRegistry.register(HiddenSingle);
 HeuristicRegistry.register(ConstraintElimination);
+HeuristicRegistry.register(CageRegionInteraction);
+HeuristicRegistry.register(CageComboReduction);
 HeuristicRegistry.register(NakedPair);
 HeuristicRegistry.register(HiddenPair);
 HeuristicRegistry.register(HiddenTriple);
@@ -37,5 +42,6 @@ HeuristicRegistry.register(ThermoFork);
 HeuristicRegistry.register(ThermoFish);
 HeuristicRegistry.register(ThermoForcing);
 HeuristicRegistry.register(ParallelThermos);
+HeuristicRegistry.register(CageForcing);
 HeuristicRegistry.register(TurbotFish);
 HeuristicRegistry.register(ConstraintClaiming);

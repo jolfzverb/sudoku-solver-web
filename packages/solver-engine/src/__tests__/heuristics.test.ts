@@ -16,6 +16,9 @@ import { YWing } from '../heuristic/techniques/YWing';
 import { ParallelThermos } from '../heuristic/techniques/ParallelThermos';
 import { ConstraintClaiming } from '../heuristic/techniques/ConstraintClaiming';
 import { TurbotFish } from '../heuristic/techniques/TurbotFish';
+import { CageRegionInteraction } from '../heuristic/techniques/CageRegionInteraction';
+import { CageComboReduction } from '../heuristic/techniques/CageComboReduction';
+import { CageForcing } from '../heuristic/techniques/CageForcing';
 import { ConstraintSet } from '../constraint/ConstraintSet';
 import { ThermometerConstraint } from '../constraint/ThermometerConstraint';
 import { CageSumConstraint } from '../constraint/CageSumConstraint';
@@ -664,6 +667,111 @@ describe('CageSumConstraint', () => {
     expect(hasElimination(step!.eliminations, 0, 1, 5)).toBe(true);
     // 4 should NOT be eliminated
     expect(hasElimination(step!.eliminations, 0, 1, 4)).toBe(false);
+  });
+
+  it('low sum eliminates large digits via combination analysis', () => {
+    // 3-cell cage sum=9. Valid combos: {1,2,6},{1,3,5},{2,3,4}. Max digit=6.
+    // Digits 7,8,9 impossible.
+    const grid = buildGrid(9, {
+      '0,0': { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] },
+      '0,1': { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] },
+      '0,2': { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] },
+    });
+    const cs = new ConstraintSet();
+    cs.add(new CageSumConstraint('cage-low', [
+      { row: 0, col: 0 }, { row: 0, col: 1 }, { row: 0, col: 2 },
+    ], 9));
+    const step = ConstraintElimination.apply(grid, cs);
+
+    expect(step).not.toBeNull();
+    for (const c of [0, 1, 2]) {
+      expect(hasElimination(step!.eliminations, 0, c, 7)).toBe(true);
+      expect(hasElimination(step!.eliminations, 0, c, 8)).toBe(true);
+      expect(hasElimination(step!.eliminations, 0, c, 9)).toBe(true);
+      // 1-6 should stay
+      expect(hasElimination(step!.eliminations, 0, c, 1)).toBe(false);
+      expect(hasElimination(step!.eliminations, 0, c, 6)).toBe(false);
+    }
+  });
+
+  it('high sum eliminates small digits via combination analysis', () => {
+    // 3-cell cage sum=24. Only valid combo: {7,8,9}. Digits 1-6 impossible.
+    const grid = buildGrid(9, {
+      '0,0': { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] },
+      '0,1': { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] },
+      '0,2': { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] },
+    });
+    const cs = new ConstraintSet();
+    cs.add(new CageSumConstraint('cage-high', [
+      { row: 0, col: 0 }, { row: 0, col: 1 }, { row: 0, col: 2 },
+    ], 24));
+    const step = ConstraintElimination.apply(grid, cs);
+
+    expect(step).not.toBeNull();
+    for (const c of [0, 1, 2]) {
+      for (let d = 1; d <= 6; d++) {
+        expect(hasElimination(step!.eliminations, 0, c, d)).toBe(true);
+      }
+      expect(hasElimination(step!.eliminations, 0, c, 7)).toBe(false);
+      expect(hasElimination(step!.eliminations, 0, c, 8)).toBe(false);
+      expect(hasElimination(step!.eliminations, 0, c, 9)).toBe(false);
+    }
+  });
+
+  it('combination analysis works with partially placed cage', () => {
+    // 3-cell cage sum=15, one cell placed as 1 → remaining sum=14, 2 empty cells
+    // Valid combos for 2 cells summing to 14 (excluding 1): {5,9},{6,8}
+    // Digits 2,3,4,7 impossible
+    const grid = buildGrid(9, {
+      '0,0': { value: 1 },
+      '0,1': { candidates: [2, 3, 4, 5, 6, 7, 8, 9] },
+      '0,2': { candidates: [2, 3, 4, 5, 6, 7, 8, 9] },
+    });
+    const cs = new ConstraintSet();
+    cs.add(new CageSumConstraint('cage-partial', [
+      { row: 0, col: 0 }, { row: 0, col: 1 }, { row: 0, col: 2 },
+    ], 15));
+    const step = ConstraintElimination.apply(grid, cs);
+
+    expect(step).not.toBeNull();
+    for (const c of [1, 2]) {
+      expect(hasElimination(step!.eliminations, 0, c, 2)).toBe(true);
+      expect(hasElimination(step!.eliminations, 0, c, 3)).toBe(true);
+      expect(hasElimination(step!.eliminations, 0, c, 4)).toBe(true);
+      expect(hasElimination(step!.eliminations, 0, c, 7)).toBe(true);
+      // 5,6,8,9 should stay
+      expect(hasElimination(step!.eliminations, 0, c, 5)).toBe(false);
+      expect(hasElimination(step!.eliminations, 0, c, 6)).toBe(false);
+      expect(hasElimination(step!.eliminations, 0, c, 8)).toBe(false);
+      expect(hasElimination(step!.eliminations, 0, c, 9)).toBe(false);
+    }
+  });
+
+  it('candidate-aware combos: eliminates digits not feasible given cell candidates', () => {
+    // 2-cell cage sum=10. Cells have candidates {1,2,3,4,6,9}.
+    // All combos for sum=10: {1,9},{2,8},{3,7},{4,6}
+    // But 7 and 8 not in candidates → {2,8} and {3,7} infeasible.
+    // Feasible combos: {1,9},{4,6}. Valid digits: {1,4,6,9}. Eliminate 2,3.
+    const grid = buildGrid(9, {
+      '0,0': { candidates: [1, 2, 3, 4, 6, 9] },
+      '0,1': { candidates: [1, 2, 3, 4, 6, 9] },
+    });
+    const cs = new ConstraintSet();
+    cs.add(new CageSumConstraint('c10', [
+      { row: 0, col: 0 }, { row: 0, col: 1 },
+    ], 10));
+    const step = ConstraintElimination.apply(grid, cs);
+
+    expect(step).not.toBeNull();
+    expect(hasElimination(step!.eliminations, 0, 0, 2)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 0, 3)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 1, 2)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 1, 3)).toBe(true);
+    // 1,4,6,9 should stay
+    expect(hasElimination(step!.eliminations, 0, 0, 1)).toBe(false);
+    expect(hasElimination(step!.eliminations, 0, 0, 4)).toBe(false);
+    expect(hasElimination(step!.eliminations, 0, 0, 6)).toBe(false);
+    expect(hasElimination(step!.eliminations, 0, 0, 9)).toBe(false);
   });
 });
 
@@ -1877,6 +1985,319 @@ describe('TurbotFish', () => {
     const grid = buildGrid(9, specs);
     const cs = buildConstraints(grid);
     expect(TurbotFish.apply(grid, cs)).toBeNull();
+  });
+});
+
+// ─── CageRegionInteraction ─────────────────────────────────────
+
+describe('CageRegionInteraction', () => {
+  it('two cages in same row: incompatible combos eliminated', () => {
+    // Row 0: cage sum=14 at (0,0)+(0,1), cage sum=15 at (0,2)+(0,3)
+    // Cage 14 combos: {5,9}, {6,8}
+    // Cage 15 combos: {6,9}, {7,8}
+    // Compatible: cage14={5,9} + cage15={7,8} only.
+    // → cage14 cells: only {5,9}; cage15 cells: only {7,8}
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    specs['0,0'] = { candidates: [5, 6, 8, 9] };
+    specs['0,1'] = { candidates: [5, 6, 8, 9] };
+    specs['0,2'] = { candidates: [6, 7, 8, 9] };
+    specs['0,3'] = { candidates: [6, 7, 8, 9] };
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    cs.add(new CageSumConstraint('c14', [{ row: 0, col: 0 }, { row: 0, col: 1 }], 14));
+    cs.add(new CageSumConstraint('c15', [{ row: 0, col: 2 }, { row: 0, col: 3 }], 15));
+
+    const step = CageRegionInteraction.apply(grid, cs);
+    expect(step).not.toBeNull();
+    expect(step!.heuristicId).toBe('cage-region-interaction');
+
+    // Cage 14: only {5,9} valid → eliminate 6,8
+    expect(hasElimination(step!.eliminations, 0, 0, 6)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 0, 8)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 0, 5)).toBe(false);
+    expect(hasElimination(step!.eliminations, 0, 0, 9)).toBe(false);
+
+    // Cage 15: only {7,8} valid → eliminate 6,9
+    expect(hasElimination(step!.eliminations, 0, 2, 6)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 2, 9)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 2, 7)).toBe(false);
+    expect(hasElimination(step!.eliminations, 0, 2, 8)).toBe(false);
+  });
+
+  it('accounts for placed digits in region', () => {
+    // Row 0: digit 9 placed at (0,8). Cage sum=14 at (0,0)+(0,1).
+    // Without 9 in row: combos {5,9},{6,8}
+    // With 9 placed: {5,9} invalid → only {6,8}
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    specs['0,8'] = { value: 9 };
+    specs['0,0'] = { candidates: [5, 6, 8] };
+    specs['0,1'] = { candidates: [5, 6, 8] };
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    cs.add(new CageSumConstraint('c14', [{ row: 0, col: 0 }, { row: 0, col: 1 }], 14));
+
+    const step = CageRegionInteraction.apply(grid, cs);
+    expect(step).not.toBeNull();
+
+    // Only {6,8} valid → eliminate 5
+    expect(hasElimination(step!.eliminations, 0, 0, 5)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 1, 5)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 0, 6)).toBe(false);
+    expect(hasElimination(step!.eliminations, 0, 0, 8)).toBe(false);
+  });
+
+  it('returns null when all combos already compatible', () => {
+    // Cage sum=3 at (0,0)+(0,1): only combo {1,2}
+    // Cage sum=7 at (0,2)+(0,3): combos {3,4} — no conflict with {1,2}
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    specs['0,0'] = { candidates: [1, 2] };
+    specs['0,1'] = { candidates: [1, 2] };
+    specs['0,2'] = { candidates: [3, 4] };
+    specs['0,3'] = { candidates: [3, 4] };
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    cs.add(new CageSumConstraint('c3', [{ row: 0, col: 0 }, { row: 0, col: 1 }], 3));
+    cs.add(new CageSumConstraint('c7', [{ row: 0, col: 2 }, { row: 0, col: 3 }], 7));
+
+    const step = CageRegionInteraction.apply(grid, cs);
+    expect(step).toBeNull();
+  });
+
+  it('works with cages in same box', () => {
+    // Box (0,0): cage sum=4 at (0,0)+(1,0), cage sum=16 at (0,1)+(1,1)
+    // Cage 4 combos: {1,3}
+    // Cage 16 combos: {7,9}
+    // All compatible. But if cage 4 had {1,3},{2,2} — only {1,3} valid (unique).
+    // Let's use: cage 3 at (0,0)+(1,0), cage 17 at (0,1)+(1,1)
+    // Cage 3: {1,2}
+    // Cage 17: {8,9}
+    // Compatible, no eliminations. Boring.
+    // Better: cage 11 at (0,0)+(1,0), cage 11 at (0,1)+(1,1)
+    // Cage 11: {2,9},{3,8},{4,7},{5,6}
+    // Two cages with same combos → must use non-overlapping combos
+    // {2,9}+{3,8}: ok. {2,9}+{4,7}: ok. {2,9}+{5,6}: ok.
+    // {3,8}+{2,9}: ok. {3,8}+{4,7}: ok. {3,8}+{5,6}: ok.
+    // {4,7}+{5,6}: ok. etc.
+    // All combos valid → no elimination. Still boring.
+    // Use: cage 15 at (0,0)+(1,0), cage 15 at (0,1)+(1,1) with digit 9 placed elsewhere in box
+    // 9 excluded → cage 15: {6,9}→invalid, {7,8}
+    // Both cages = {7,8} → conflict (need 4 distinct digits from {7,8})
+    // → dead end / contradiction
+    // Let me try: cage 13 at (0,0)+(1,0), cage 15 at (0,1)+(1,1)
+    // Cage 13: {4,9},{5,8},{6,7}
+    // Cage 15: {6,9},{7,8}
+    // Compatible: {4,9}+{6,... nah 6 ok, 7,8}: {4,9}+{7,8}: ok. {4,9}+{6,9}: 9 conflict.
+    // {5,8}+{6,9}: ok. {5,8}+{7,8}: 8 conflict.
+    // {6,7}+{6,9}: 6 conflict. {6,7}+{7,8}: 7 conflict.
+    // Valid: {4,9}+{7,8}, {5,8}+{6,9}
+    // Cage 13 valid digits: {4,5,8,9}. Cage 15 valid digits: {6,7,8,9}.
+    // Cage 13: eliminate 6,7. Cage 15: no elim (all {6,7,8,9} valid).
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    specs['0,0'] = { candidates: [4, 5, 6, 7, 8, 9] };
+    specs['1,0'] = { candidates: [4, 5, 6, 7, 8, 9] };
+    specs['0,1'] = { candidates: [6, 7, 8, 9] };
+    specs['1,1'] = { candidates: [6, 7, 8, 9] };
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    cs.add(new CageSumConstraint('c13', [{ row: 0, col: 0 }, { row: 1, col: 0 }], 13));
+    cs.add(new CageSumConstraint('c15', [{ row: 0, col: 1 }, { row: 1, col: 1 }], 15));
+
+    const step = CageRegionInteraction.apply(grid, cs);
+    expect(step).not.toBeNull();
+
+    // Cage 13: valid {4,5,8,9} → eliminate 6,7
+    expect(hasElimination(step!.eliminations, 0, 0, 6)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 0, 7)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 0, 4)).toBe(false);
+    expect(hasElimination(step!.eliminations, 0, 0, 9)).toBe(false);
+  });
+});
+
+// ─── CageComboReduction ───────────────────────────────────────
+
+describe('CageComboReduction', () => {
+  it('digit forced into cage by region → combos without it removed', () => {
+    // Row 0: cage sum=10 at (0,0)+(0,1). All other row 0 cells lack digit 1.
+    // So digit 1 MUST be in the cage → only combos with 1: {1,9}.
+    // Combos without digit 1 ({4,6},{2,8},{3,7}) removed → valid = {1,9}.
+    // Cage cells lose everything except 1,9.
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [2, 3, 4, 5, 6, 7, 8, 9] }; // no 1
+      }
+    }
+    specs['0,0'] = { candidates: [1, 3, 4, 6, 9] };
+    specs['0,1'] = { candidates: [1, 4, 6, 8, 9] };
+    // All other row 0 cells: no candidate 1 (default above)
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    cs.add(new CageSumConstraint('cR', [{ row: 0, col: 0 }, { row: 0, col: 1 }], 10));
+
+    const step = CageComboReduction.apply(grid, cs);
+    expect(step).not.toBeNull();
+    expect(step!.heuristicId).toBe('cage-combo-reduction');
+
+    // Only combo {1,9} survives. Valid digits = {1,9}.
+    // Eliminate 3,4,6 from (0,0); eliminate 4,6,8 from (0,1)
+    expect(hasElimination(step!.eliminations, 0, 0, 3)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 0, 4)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 0, 6)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 0, 1)).toBe(false);
+    expect(hasElimination(step!.eliminations, 0, 0, 9)).toBe(false);
+
+    expect(hasElimination(step!.eliminations, 0, 1, 4)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 1, 6)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 1, 8)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 1, 1)).toBe(false);
+    expect(hasElimination(step!.eliminations, 0, 1, 9)).toBe(false);
+  });
+
+  it('placed digit in region excludes combos containing it', () => {
+    // Box (0,0): digit 9 placed at (2,2). Cage sum=10 at (0,0)+(0,1).
+    // Cage combos for sum=10: {1,9},{2,8},{3,7},{4,6}
+    // 9 placed in box → exclude {1,9} → valid: {2,8},{3,7},{4,6}
+    // Valid digits = {2,3,4,6,7,8}. Cage cells lose 1,9.
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    specs['2,2'] = { value: 9 };
+    specs['0,0'] = { candidates: [1, 2, 3, 4, 6, 7, 8, 9] };
+    specs['0,1'] = { candidates: [1, 2, 3, 4, 6, 7, 8, 9] };
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    cs.add(new CageSumConstraint('cB', [{ row: 0, col: 0 }, { row: 0, col: 1 }], 10));
+
+    const step = CageComboReduction.apply(grid, cs);
+    expect(step).not.toBeNull();
+
+    // 1 and 9 eliminated (combo {1,9} excluded because 9 in box)
+    expect(hasElimination(step!.eliminations, 0, 0, 1)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 0, 9)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 0, 2)).toBe(false);
+    expect(hasElimination(step!.eliminations, 0, 0, 8)).toBe(false);
+  });
+
+  it('returns null when no reduction possible', () => {
+    // Cage with all combos still valid, no external forcing
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    specs['0,0'] = { candidates: [1, 2, 3, 4, 6, 7, 8, 9] };
+    specs['0,1'] = { candidates: [1, 2, 3, 4, 6, 7, 8, 9] };
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    cs.add(new CageSumConstraint('cN', [{ row: 0, col: 0 }, { row: 0, col: 1 }], 10));
+
+    const step = CageComboReduction.apply(grid, cs);
+    expect(step).toBeNull();
+  });
+});
+
+// ─── CageForcing ──────────────────────────────────────────────
+
+describe('CageForcing', () => {
+  it('external cell blocks combo whose digits cover all its candidates', () => {
+    // Cage sum=15, (0,0)+(0,1). Combos: {6,9},{7,8}.
+    // External cell (1,0) has {7,8} and sees both cage cells (col 0 + box).
+    // Combo {7,8} → (1,0) loses 7,8 → empty → combo excluded.
+    // Only {6,9} survives → eliminate 7,8 from cage cells.
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    specs['0,0'] = { candidates: [6, 7, 8, 9] };
+    specs['0,1'] = { candidates: [6, 7, 8, 9] };
+    specs['1,0'] = { candidates: [7, 8] };
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    cs.add(new CageSumConstraint('cF', [{ row: 0, col: 0 }, { row: 0, col: 1 }], 15));
+
+    const step = CageForcing.apply(grid, cs);
+    expect(step).not.toBeNull();
+    expect(step!.heuristicId).toBe('cage-forcing');
+
+    // Only {6,9} valid → eliminate 7,8
+    expect(hasElimination(step!.eliminations, 0, 0, 7)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 0, 8)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 1, 7)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 1, 8)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 0, 6)).toBe(false);
+    expect(hasElimination(step!.eliminations, 0, 0, 9)).toBe(false);
+  });
+
+  it('does not block combo when external has candidates outside combo', () => {
+    // Cage sum=15, (0,0)+(0,1). Combos: {6,9},{7,8}.
+    // External cell (1,0) has {5,7,8}. Combo {7,8} → (1,0) loses 7,8 → {5} remains. OK!
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    specs['0,0'] = { candidates: [6, 7, 8, 9] };
+    specs['0,1'] = { candidates: [6, 7, 8, 9] };
+    specs['1,0'] = { candidates: [5, 7, 8] };
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    cs.add(new CageSumConstraint('cF', [{ row: 0, col: 0 }, { row: 0, col: 1 }], 15));
+
+    expect(CageForcing.apply(grid, cs)).toBeNull();
+  });
+
+  it('returns null with only one combo', () => {
+    // Cage sum=17, (0,0)+(0,1). Only combo: {8,9}. Nothing to eliminate.
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    specs['0,0'] = { candidates: [8, 9] };
+    specs['0,1'] = { candidates: [8, 9] };
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    cs.add(new CageSumConstraint('cF', [{ row: 0, col: 0 }, { row: 0, col: 1 }], 17));
+
+    expect(CageForcing.apply(grid, cs)).toBeNull();
   });
 });
 

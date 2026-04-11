@@ -13,6 +13,9 @@ export class ThermometerConstraint implements Constraint {
   }
 
   validate(grid: Grid): Violation[] {
+    if (this.affectedCells.length > grid.size) {
+      return [{ constraintId: this.id, message: `Thermometer has ${this.affectedCells.length} cells but grid size is only ${grid.size}`, cells: [...this.affectedCells] }];
+    }
     let prevValue: number | null = null;
     for (const pos of this.affectedCells) {
       const cell = grid.getCell(pos);

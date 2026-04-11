@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { usePuzzle } from '../../state/PuzzleContext';
 import { useSolverRunner } from '../../hooks/useSolverRunner';
-import { VariantRegistry } from '@sudoku/solver-engine';
+import { VariantRegistry, GridSnapshot, CellSnapshot } from '@sudoku/solver-engine';
 import { EditMode, UserConstraint } from '../../state/puzzleReducer';
 
 const SIZES = [4, 6, 9, 16];
@@ -20,6 +21,88 @@ function constraintLabel(c: UserConstraint): string {
   }
 }
 
+interface PuzzleData {
+  variant: string;
+  size: number;
+  givens: string;
+  constraints: Array<{ type: string; cells: number[][]; sum?: number }>;
+}
+
+function serializePuzzle(
+  variant: string,
+  size: number,
+  grid: GridSnapshot,
+  constraints: UserConstraint[],
+): string {
+  let givens = '';
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const cell = grid.cells[r * size + c];
+      givens += cell.value !== null ? String(cell.value) : '.';
+    }
+  }
+
+  const data: PuzzleData = {
+    variant,
+    size,
+    givens,
+    constraints: constraints.map(c => ({
+      type: c.type,
+      cells: c.cells.map(p => [p.row, p.col]),
+      ...(c.sum !== undefined ? { sum: c.sum } : {}),
+    })),
+  };
+
+  return JSON.stringify(data);
+}
+
+function deserializePuzzle(json: string): {
+  variant: string;
+  size: number;
+  grid: GridSnapshot;
+  constraints: UserConstraint[];
+} {
+  const data: PuzzleData = JSON.parse(json);
+
+  if (!data.variant || !data.size || !data.givens) {
+    throw new Error('Invalid puzzle format');
+  }
+
+  const size = data.size;
+  if (data.givens.length !== size * size) {
+    throw new Error(`Givens length ${data.givens.length} doesn't match size ${size}x${size}`);
+  }
+
+  const cells: CellSnapshot[] = [];
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const ch = data.givens[r * size + c];
+      const digit = ch === '.' ? null : parseInt(ch);
+      cells.push({
+        position: { row: r, col: c },
+        value: digit,
+        candidates: [],
+        isGiven: digit !== null,
+      });
+    }
+  }
+
+  let idCounter = 0;
+  const constraints: UserConstraint[] = (data.constraints ?? []).map(c => ({
+    id: `imported-${c.type}-${++idCounter}`,
+    type: c.type as 'thermo' | 'cage' | 'arrow',
+    cells: c.cells.map(([row, col]) => ({ row, col })),
+    ...(c.sum !== undefined ? { sum: c.sum } : {}),
+  }));
+
+  return {
+    variant: data.variant,
+    size,
+    grid: { cells, size },
+    constraints,
+  };
+}
+
 export function SetupPanel() {
   const { state: puzzle, dispatch } = usePuzzle();
   const { initSolver, stepOnce, solveAll, reset, isSolving, isSolved } = useSolverRunner();
@@ -28,9 +111,30 @@ export function SetupPanel() {
   const currentVariant = variants.find(v => v.name === puzzle.variant);
   const supportedSizes = currentVariant?.supportedSizes ?? SIZES;
 
+  const [copyLabel, setCopyLabel] = useState('Copy');
+
   const isSetup = puzzle.status === 'setup';
   const isConstraintMode = puzzle.editMode !== 'digit';
   const hasPending = puzzle.pendingCells.length > 0;
+
+  const handleCopy = () => {
+    const json = serializePuzzle(puzzle.variant, puzzle.size, puzzle.grid, puzzle.constraints);
+    navigator.clipboard.writeText(json).then(() => {
+      setCopyLabel('Copied!');
+      setTimeout(() => setCopyLabel('Copy'), 1500);
+    });
+  };
+
+  const handleImport = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const { variant, size, grid, constraints } = deserializePuzzle(text);
+      dispatch({ type: 'LOAD_PUZZLE', variant, size, grid, constraints });
+      dispatch({ type: 'SET_ERROR', error: null });
+    } catch (e) {
+      dispatch({ type: 'SET_ERROR', error: `Import failed: ${(e as Error).message}` });
+    }
+  };
 
   return (
     <div className="setup-panel">
@@ -61,6 +165,16 @@ export function SetupPanel() {
             ))}
           </select>
         </div>
+        {isSetup && (
+          <div className="button-row">
+            <button className="btn btn-sm btn-secondary" onClick={handleCopy}>
+              {copyLabel}
+            </button>
+            <button className="btn btn-sm btn-secondary" onClick={handleImport}>
+              Import
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Edit tools */}
@@ -96,10 +210,12 @@ export function SetupPanel() {
                   <label>Sum:</label>
                   <input
                     type="number"
+                    inputMode="numeric"
                     min={1}
                     value={puzzle.pendingCageSum ?? ''}
                     onChange={e => dispatch({ type: 'SET_CAGE_SUM', sum: parseInt(e.target.value) || 0 })}
                     className="cage-sum-input"
+                    autoFocus
                   />
                 </div>
               )}
