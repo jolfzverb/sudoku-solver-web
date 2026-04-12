@@ -1,8 +1,9 @@
 import { Grid } from '../../model/Grid';
 import { ConstraintSet } from '../../constraint/ConstraintSet';
 import { Heuristic, SolveStep } from '../types';
-import { CellPosition } from '../../model/types';
+import { CellPosition, Region } from '../../model/types';
 import { Constraint, Elimination } from '../../constraint/types';
+import { formatRegion } from '../utils';
 
 /**
  * Constraint Claiming heuristic.
@@ -34,7 +35,7 @@ export const ConstraintClaiming: Heuristic = {
       if (!DISTINCT_TYPES.has(constraint.type)) continue;
 
       for (const box of boxRegions) {
-        const step = analyzeConstraintBox(grid, constraint, box.cells);
+        const step = analyzeConstraintBox(grid, constraint, box);
         if (step) return step;
       }
     }
@@ -46,8 +47,9 @@ export const ConstraintClaiming: Heuristic = {
 function analyzeConstraintBox(
   grid: Grid,
   constraint: Constraint,
-  boxCells: ReadonlyArray<CellPosition>,
+  box: Region,
 ): SolveStep | null {
+  const boxCells = box.cells;
   const boxSet = new Set(boxCells.map(p => `${p.row},${p.col}`));
   const constraintCells = constraint.affectedCells;
 
@@ -97,42 +99,14 @@ function analyzeConstraintBox(
   // Try each individual row group
   for (const [row, group] of byRow) {
     const lineSet = new Set(boxCells.filter(p => p.row === row).map(p => `${p.row},${p.col}`));
-    const step = tryLockedSet(grid, constraint, group, boxCells, lineSet, internalSet, 'row', row);
+    const step = tryLockedSet(grid, constraint, group, boxCells, lineSet, internalSet, 'row', row, box);
     if (step) return step;
   }
 
   // Try each individual column group
   for (const [col, group] of byCol) {
     const lineSet = new Set(boxCells.filter(p => p.col === col).map(p => `${p.row},${p.col}`));
-    const step = tryLockedSet(grid, constraint, group, boxCells, lineSet, internalSet, 'col', col);
-    if (step) return step;
-  }
-
-  // Try combining ALL row-sharing externals
-  if (byRow.size > 1) {
-    const allRowExt: CellPosition[] = [];
-    const allRowLineSet = new Set<string>();
-    for (const [row, group] of byRow) {
-      allRowExt.push(...group);
-      for (const p of boxCells) {
-        if (p.row === row) allRowLineSet.add(`${p.row},${p.col}`);
-      }
-    }
-    const step = tryLockedSet(grid, constraint, allRowExt, boxCells, allRowLineSet, internalSet, 'rows', -1);
-    if (step) return step;
-  }
-
-  // Try combining ALL col-sharing externals
-  if (byCol.size > 1) {
-    const allColExt: CellPosition[] = [];
-    const allColLineSet = new Set<string>();
-    for (const [col, group] of byCol) {
-      allColExt.push(...group);
-      for (const p of boxCells) {
-        if (p.col === col) allColLineSet.add(`${p.row},${p.col}`);
-      }
-    }
-    const step = tryLockedSet(grid, constraint, allColExt, boxCells, allColLineSet, internalSet, 'cols', -1);
+    const step = tryLockedSet(grid, constraint, group, boxCells, lineSet, internalSet, 'col', col, box);
     if (step) return step;
   }
 
@@ -148,6 +122,7 @@ function tryLockedSet(
   internalSet: Set<string>,
   lineType: string,
   lineIndex: number,
+  box: Region,
 ): SolveStep | null {
   const k = externalGroup.length;
 
@@ -189,14 +164,31 @@ function tryLockedSet(
 
   if (elims.length === 0) return null;
 
+  const fmt = (p: CellPosition) => `R${p.row + 1}C${p.col + 1}`;
   const lineDesc = lineType === 'rows' || lineType === 'cols'
     ? `multiple ${lineType}`
     : `${lineType} ${lineIndex + 1}`;
 
+  // Constraint label: use top-left cell + sum/length instead of raw id
+  let constraintLabel: string;
+  const topLeft = constraint.affectedCells.reduce((best, c) =>
+    c.row < best.row || (c.row === best.row && c.col < best.col) ? c : best,
+    constraint.affectedCells[0],
+  );
+  if (constraint.type === 'cage-sum') {
+    const sum = (constraint as unknown as { targetSum: number }).targetSum;
+    constraintLabel = `cage sum=${sum} at ${fmt(topLeft)}`;
+  } else if (constraint.type === 'thermo') {
+    constraintLabel = `thermo (${constraint.affectedCells.length} cells) at ${fmt(topLeft)}`;
+  } else {
+    constraintLabel = `${constraint.type} at ${fmt(topLeft)}`;
+  }
+
   return {
     heuristicId: 'constraint-claiming',
-    description: `Constraint Claiming: ${constraint.type} ${constraint.id} — `
-      + `${k} external cells on ${lineDesc} lock ${k} cells in box, `
+    description: `Constraint Claiming: ${constraintLabel} — `
+      + `${k} external [${externalGroup.map(fmt).join(',')}] on ${lineDesc} `
+      + `lock [${available.map(fmt).join(',')}] in ${formatRegion(box.id)}, `
       + `possible values {${[...possibleValues].sort((a, b) => a - b).join(',')}}`,
     placements: [],
     eliminations: elims,

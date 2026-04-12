@@ -22,6 +22,7 @@ import { TurbotFish } from './techniques/TurbotFish';
 import { CageRegionInteraction } from './techniques/CageRegionInteraction';
 import { CageComboReduction } from './techniques/CageComboReduction';
 import { CageForcing } from './techniques/CageForcing';
+import { CageSubsets } from './techniques/CageSubsets';
 
 // Register all built-in heuristics in priority order
 HeuristicRegistry.register(NakedSingle);
@@ -29,6 +30,7 @@ HeuristicRegistry.register(HiddenSingle);
 HeuristicRegistry.register(ConstraintElimination);
 HeuristicRegistry.register(CageRegionInteraction);
 HeuristicRegistry.register(CageComboReduction);
+HeuristicRegistry.register(CageSubsets);
 HeuristicRegistry.register(NakedPair);
 HeuristicRegistry.register(HiddenPair);
 HeuristicRegistry.register(HiddenTriple);

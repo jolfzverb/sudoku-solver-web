@@ -13,7 +13,7 @@ const EDIT_MODES: { mode: EditMode; label: string }[] = [
   { mode: 'arrow', label: 'Arrow' },
 ];
 
-function constraintLabel(c: UserConstraint): string {
+export function constraintLabel(c: UserConstraint): string {
   switch (c.type) {
     case 'thermo': return `Thermo (${c.cells.length} cells)`;
     case 'cage': return `Cage =${c.sum} (${c.cells.length} cells)`;
@@ -243,29 +243,6 @@ export function SetupPanel() {
         </div>
       )}
 
-      {/* Constraint list */}
-      {puzzle.constraints.length > 0 && (
-        <div className="setup-section">
-          <h3>Constraints</h3>
-          <ul className="constraint-list">
-            {puzzle.constraints.map(c => (
-              <li key={c.id}>
-                <span>{constraintLabel(c)}</span>
-                {isSetup && (
-                  <button
-                    className="btn-remove"
-                    onClick={() => dispatch({ type: 'REMOVE_CONSTRAINT', id: c.id })}
-                    title="Remove"
-                  >
-                    x
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {/* Error display */}
       {puzzle.error && (
         <div className="setup-section error-message">
@@ -298,6 +275,7 @@ export function SetupPanel() {
           )}
         </div>
       </div>
+
     </div>
   );
 }

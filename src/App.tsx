@@ -6,6 +6,7 @@ import { GridView } from './components/grid/GridView';
 import { SetupPanel } from './components/controls/SetupPanel';
 import { PlaybackControls } from './components/controls/PlaybackControls';
 import { ReportPanel } from './components/report/ReportPanel';
+import { ConstraintList } from './components/controls/ConstraintList';
 import { usePuzzle } from './state/PuzzleContext';
 import { useSolver } from './state/SolverContext';
 import { useHighlight } from './hooks/useHighlight';
@@ -166,9 +167,10 @@ function App() {
             <>
               <SetupPanel />
               <PlaybackControls />
+              <ReportPanel />
             </>
           }
-          report={<ReportPanel />}
+          report={<ConstraintList />}
         />
       </SolverProvider>
     </PuzzleProvider>

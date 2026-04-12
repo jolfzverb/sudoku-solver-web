@@ -19,6 +19,7 @@ import { TurbotFish } from '../heuristic/techniques/TurbotFish';
 import { CageRegionInteraction } from '../heuristic/techniques/CageRegionInteraction';
 import { CageComboReduction } from '../heuristic/techniques/CageComboReduction';
 import { CageForcing } from '../heuristic/techniques/CageForcing';
+import { CageSubsets } from '../heuristic/techniques/CageSubsets';
 import { ConstraintSet } from '../constraint/ConstraintSet';
 import { ThermometerConstraint } from '../constraint/ThermometerConstraint';
 import { CageSumConstraint } from '../constraint/CageSumConstraint';
@@ -2298,6 +2299,168 @@ describe('CageForcing', () => {
     cs.add(new CageSumConstraint('cF', [{ row: 0, col: 0 }, { row: 0, col: 1 }], 17));
 
     expect(CageForcing.apply(grid, cs)).toBeNull();
+  });
+});
+
+// ─── CageSubsets ──────────────────────────────────────────────
+
+describe('CageSubsets', () => {
+  it('naked triple in cage eliminates from other cage cell', () => {
+    // Cage sum=15, 5 cells. Cell 4 has value 2.
+    // Empty cells: {4,5}, {3,4,5}, {3,5}, {1,4}
+    // Cells 0-2 form naked triple {3,4,5} → eliminate 4 from cell 3
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    specs['0,0'] = { candidates: [4, 5] };
+    specs['0,1'] = { candidates: [3, 4, 5] };
+    specs['0,2'] = { candidates: [3, 5] };
+    specs['1,0'] = { value: 2 };
+    specs['3,3'] = { candidates: [1, 4] }; // different row and box
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    cs.add(new CageSumConstraint('cNT', [
+      { row: 0, col: 0 }, { row: 0, col: 1 }, { row: 0, col: 2 },
+      { row: 1, col: 0 }, { row: 3, col: 3 },
+    ], 15));
+
+    const step = CageSubsets.apply(grid, cs);
+    expect(step).not.toBeNull();
+    expect(step!.heuristicId).toBe('cage-subsets');
+
+    // 4 eliminated from (3,3) because {3,4,5} locked in cells 0-2
+    expect(hasElimination(step!.eliminations, 3, 3, 4)).toBe(true);
+    expect(hasElimination(step!.eliminations, 3, 3, 1)).toBe(false);
+    // Triple cells should NOT be eliminated
+    expect(hasElimination(step!.eliminations, 0, 0, 4)).toBe(false);
+    expect(hasElimination(step!.eliminations, 0, 0, 5)).toBe(false);
+  });
+
+  it('naked pair in cage across different boxes', () => {
+    // Cage 3 cells: {2,7}, {2,7}, {3,5,6} — cells in different boxes
+    // Cells 0,1 form naked pair {2,7} → eliminate 2,7 from cell 2
+    // But cell 2 doesn't have 2 or 7 → no elim. Let me fix:
+    // Cage 3 cells: {2,7}, {2,7}, {2,3,7}
+    // Naked pair {2,7} → eliminate 2,7 from cell 2 → cell 2 = {3}
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    specs['0,0'] = { candidates: [2, 7] };
+    specs['4,4'] = { candidates: [2, 7] }; // different box
+    specs['7,7'] = { candidates: [2, 3, 7] }; // different box
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    cs.add(new CageSumConstraint('cNP', [
+      { row: 0, col: 0 }, { row: 4, col: 4 }, { row: 7, col: 7 },
+    ], 12));
+
+    const step = CageSubsets.apply(grid, cs);
+    expect(step).not.toBeNull();
+
+    expect(hasElimination(step!.eliminations, 7, 7, 2)).toBe(true);
+    expect(hasElimination(step!.eliminations, 7, 7, 7)).toBe(true);
+    expect(hasElimination(step!.eliminations, 7, 7, 3)).toBe(false);
+  });
+
+  it('hidden pair in cage with valid sum', () => {
+    // Cage 4 cells sum=14: {1,2,3},{1,2,3},{1,3,4,5},{4,5}
+    // Only combo: {2,3,4,5}=14.
+    // Combo-assignment: c0∈{2,3}, c1∈{2,3}, c2∈{4,5}, c3∈{4,5}
+    // Direct elimination catches: c0 loses 1, c1 loses 1, c2 loses 1,3
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    specs['0,0'] = { candidates: [1, 2, 3] };
+    specs['3,3'] = { candidates: [1, 2, 3] };
+    specs['6,6'] = { candidates: [1, 3, 4, 5] };
+    specs['8,8'] = { candidates: [4, 5] };
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    cs.add(new CageSumConstraint('cHP', [
+      { row: 0, col: 0 }, { row: 3, col: 3 }, { row: 6, col: 6 }, { row: 8, col: 8 },
+    ], 14));
+
+    const step = CageSubsets.apply(grid, cs);
+    expect(step).not.toBeNull();
+
+    // Combo-assignment: c2 effective={4,5} → eliminate 1,3
+    expect(hasElimination(step!.eliminations, 6, 6, 1)).toBe(true);
+    expect(hasElimination(step!.eliminations, 6, 6, 3)).toBe(true);
+    expect(hasElimination(step!.eliminations, 6, 6, 4)).toBe(false);
+    expect(hasElimination(step!.eliminations, 6, 6, 5)).toBe(false);
+    // c0,c1 lose 1
+    expect(hasElimination(step!.eliminations, 0, 0, 1)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 0, 2)).toBe(false);
+  });
+
+  it('combo-aware: does not report false hidden pair from infeasible combos', () => {
+    // Cage sum=25, 5 cells: {1,4},{1,4},{2,4,5},{5,6,7},[9]
+    // Naive analysis: digits 2,5 appear in cells 2,3 only → hidden pair?
+    // But combo {1,2,6,7} can't be assigned (cells 0,1 only have {1,4}, need 2 digits).
+    // Only valid combo+assignment: {1,4,5,6} → cell2=5, cell3=6.
+    // Effective candidates: cell0={1,4}, cell1={1,4}, cell2={5}, cell3={6}.
+    // Direct elimination: cell2 loses 2,4; cell3 loses 5,7.
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    specs['0,0'] = { candidates: [1, 4] };
+    specs['0,1'] = { candidates: [1, 4] };
+    specs['0,2'] = { candidates: [2, 4, 5] };
+    specs['0,3'] = { candidates: [5, 6, 7] };
+    specs['3,3'] = { value: 9 };
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    cs.add(new CageSumConstraint('cCA', [
+      { row: 0, col: 0 }, { row: 0, col: 1 }, { row: 0, col: 2 },
+      { row: 0, col: 3 }, { row: 3, col: 3 },
+    ], 25));
+
+    const step = CageSubsets.apply(grid, cs);
+    expect(step).not.toBeNull();
+
+    // Combo assignment analysis: cell2 must be 5, cell3 must be 6
+    expect(hasElimination(step!.eliminations, 0, 2, 2)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 2, 4)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 2, 5)).toBe(false);
+    expect(hasElimination(step!.eliminations, 0, 3, 5)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 3, 7)).toBe(true);
+    expect(hasElimination(step!.eliminations, 0, 3, 6)).toBe(false);
+    // Cells 0,1 keep {1,4} — both are valid in the assignment
+    expect(hasElimination(step!.eliminations, 0, 0, 1)).toBe(false);
+    expect(hasElimination(step!.eliminations, 0, 0, 4)).toBe(false);
+  });
+
+  it('returns null with fewer than 3 empty cells', () => {
+    const specs: Record<string, { value?: number; candidates?: number[] }> = {};
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 9; c++) {
+        specs[`${r},${c}`] = { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] };
+      }
+    }
+    specs['0,0'] = { candidates: [1, 2] };
+    specs['0,1'] = { candidates: [1, 2] };
+
+    const grid = buildGrid(9, specs);
+    const cs = buildConstraints(grid);
+    cs.add(new CageSumConstraint('c2', [{ row: 0, col: 0 }, { row: 0, col: 1 }], 3));
+
+    expect(CageSubsets.apply(grid, cs)).toBeNull();
   });
 });
 

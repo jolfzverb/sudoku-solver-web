@@ -16,4 +16,5 @@ export { ConstraintClaiming } from './ConstraintClaiming';
 export { CageRegionInteraction } from './CageRegionInteraction';
 export { CageComboReduction } from './CageComboReduction';
 export { CageForcing } from './CageForcing';
+export { CageSubsets } from './CageSubsets';
 export { TurbotFish } from './TurbotFish';
