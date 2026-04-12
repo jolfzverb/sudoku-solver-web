@@ -11,7 +11,7 @@ export function parse81(input: string): PuzzleData {
       givens.push({ position: { row: Math.floor(i / 9), col: i % 9 }, digit });
     }
   }
-  return { size: 9, variant: 'classic', givens };
+  return { size: 9, givens };
 }
 
 export function gridToString81(cells: ReadonlyArray<{ value: number | null }>): string {

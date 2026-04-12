@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react';
 import {
-  GridFactory, GridSpec, Solver, ConstraintSet,
-  VariantRegistry, ThermometerConstraint, CageSumConstraint,
+  GridFactory, GridSpec, Solver, ConstraintSet, RegionConstraint,
+  ThermometerConstraint, CageSumConstraint,
   ArrowSumConstraint, SolveStep, SolveResult,
 } from '@sudoku/solver-engine';
 import { usePuzzle } from '../state/PuzzleContext';
@@ -18,11 +18,16 @@ export function useSolverRunner() {
   const genRef = useRef<Generator<SolveStep, SolveResult> | null>(null);
 
   const initSolver = useCallback(() => {
-    const variant = VariantRegistry.get(puzzle.variant);
-    if (!variant) throw new Error(`Unknown variant: ${puzzle.variant}`);
-
-    const regions = variant.buildRegions(puzzle.size);
     const dims = BOX_DIMS[puzzle.size] ?? [3, 3];
+    const regions = GridFactory.standardRegions(puzzle.size, dims[0], dims[1]);
+
+    // Add diagonal regions if user added diagonal constraints
+    for (const uc of puzzle.constraints) {
+      if (uc.type === 'diagonal') {
+        regions.push({ id: uc.id, type: 'diagonal', cells: uc.cells });
+      }
+    }
+
     const spec: GridSpec = {
       size: puzzle.size,
       boxWidth: dims[0],
@@ -30,23 +35,21 @@ export function useSolverRunner() {
       regions,
     };
 
-    // Collect givens from current grid
     const givens = puzzle.grid.cells
       .filter(c => c.value !== null)
       .map(c => ({ position: c.position, digit: c.value! }));
 
     const grid = GridFactory.createWithGivens(spec, givens);
 
-    // Build constraints: variant base + user-defined
+    // Build constraints: standard region constraints + user-defined
     const constraintSet = new ConstraintSet();
-    for (const c of variant.buildConstraints(grid)) {
-      constraintSet.add(c);
+    for (const region of grid.getRegions()) {
+      constraintSet.add(new RegionConstraint(region));
     }
     for (const uc of puzzle.constraints) {
       addUserConstraint(constraintSet, uc);
     }
 
-    // Validate grid before solving
     const violations = constraintSet.validateAll(grid);
     if (violations.length > 0) {
       const messages = violations.map(v => v.message);
@@ -62,7 +65,7 @@ export function useSolverRunner() {
 
     const solverInstance = new Solver(grid, constraintSet);
     genRef.current = solverInstance.solveIterative();
-  }, [puzzle.variant, puzzle.size, puzzle.grid, puzzle.constraints, puzzleDispatch, solverDispatch]);
+  }, [puzzle.size, puzzle.grid, puzzle.constraints, puzzleDispatch, solverDispatch]);
 
   const stepOnce = useCallback(() => {
     const gen = genRef.current;
@@ -127,6 +130,9 @@ function addUserConstraint(cs: ConstraintSet, uc: UserConstraint): void {
       break;
     case 'arrow':
       cs.add(new ArrowSumConstraint(uc.id, uc.cells[0], uc.cells.slice(1)));
+      break;
+    case 'diagonal':
+      // Diagonal regions are added to grid regions directly, not as constraints here
       break;
   }
 }

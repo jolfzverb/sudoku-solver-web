@@ -5,13 +5,12 @@ export type EditMode = 'digit' | 'thermo' | 'cage' | 'arrow';
 
 export interface UserConstraint {
   id: string;
-  type: 'thermo' | 'cage' | 'arrow';
+  type: 'thermo' | 'cage' | 'arrow' | 'diagonal';
   cells: CellPosition[];
   sum?: number;
 }
 
 export interface PuzzleState {
-  variant: string;
   size: number;
   grid: GridSnapshot;
   status: PuzzleStatus;
@@ -24,7 +23,6 @@ export interface PuzzleState {
 }
 
 export type PuzzleAction =
-  | { type: 'SET_VARIANT'; variant: string }
   | { type: 'SET_SIZE'; size: number }
   | { type: 'SELECT_CELL'; pos: CellPosition | null }
   | { type: 'SET_CELL_VALUE'; pos: CellPosition; digit: number | null }
@@ -33,11 +31,12 @@ export type PuzzleAction =
   | { type: 'SET_CAGE_SUM'; sum: number }
   | { type: 'FINISH_CONSTRAINT' }
   | { type: 'CANCEL_CONSTRAINT' }
+  | { type: 'ADD_CONSTRAINT'; constraint: UserConstraint }
   | { type: 'REMOVE_CONSTRAINT'; id: string }
   | { type: 'SET_STATUS'; status: PuzzleStatus }
   | { type: 'SET_GRID'; grid: GridSnapshot }
   | { type: 'SET_ERROR'; error: string | null }
-  | { type: 'LOAD_PUZZLE'; variant: string; size: number; grid: GridSnapshot; constraints: UserConstraint[] }
+  | { type: 'LOAD_PUZZLE'; size: number; grid: GridSnapshot; constraints: UserConstraint[] }
   | { type: 'RESET' };
 
 export function createEmptyGrid(size: number): GridSnapshot {
@@ -56,7 +55,6 @@ export function createEmptyGrid(size: number): GridSnapshot {
 }
 
 export const initialPuzzleState: PuzzleState = {
-  variant: 'classic',
   size: 9,
   grid: createEmptyGrid(9),
   status: 'setup',
@@ -76,17 +74,9 @@ function cellInList(list: CellPosition[], pos: CellPosition): boolean {
 
 export function puzzleReducer(state: PuzzleState, action: PuzzleAction): PuzzleState {
   switch (action.type) {
-    case 'SET_VARIANT':
-      return {
-        ...initialPuzzleState,
-        variant: action.variant,
-        size: state.size,
-        grid: createEmptyGrid(state.size),
-      };
     case 'SET_SIZE':
       return {
         ...initialPuzzleState,
-        variant: state.variant,
         size: action.size,
         grid: createEmptyGrid(action.size),
       };
@@ -131,6 +121,8 @@ export function puzzleReducer(state: PuzzleState, action: PuzzleAction): PuzzleS
     }
     case 'CANCEL_CONSTRAINT':
       return { ...state, pendingCells: [], pendingCageSum: null };
+    case 'ADD_CONSTRAINT':
+      return { ...state, constraints: [...state.constraints, action.constraint] };
     case 'REMOVE_CONSTRAINT':
       return { ...state, constraints: state.constraints.filter(c => c.id !== action.id) };
     case 'SET_STATUS':
@@ -142,7 +134,6 @@ export function puzzleReducer(state: PuzzleState, action: PuzzleAction): PuzzleS
     case 'LOAD_PUZZLE':
       return {
         ...initialPuzzleState,
-        variant: action.variant,
         size: action.size,
         grid: action.grid,
         constraints: action.constraints,
@@ -150,7 +141,6 @@ export function puzzleReducer(state: PuzzleState, action: PuzzleAction): PuzzleS
     case 'RESET':
       return {
         ...initialPuzzleState,
-        variant: state.variant,
         size: state.size,
         grid: createEmptyGrid(state.size),
       };

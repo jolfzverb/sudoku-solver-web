@@ -37,12 +37,13 @@ export class Solver {
     let maxDifficulty: DifficultyTier = 'basic';
 
     // Main deduction loop
-    yield* this.deductionLoop(steps, heuristicCounts, (d) => {
+    const error: string | undefined = yield* this.deductionLoop(steps, heuristicCounts, (d) => {
       if (TIER_ORDER.indexOf(d) > TIER_ORDER.indexOf(maxDifficulty)) maxDifficulty = d;
     });
 
     return {
-      solved: this.isSolved(),
+      solved: !error && this.isSolved(),
+      error,
       steps,
       heuristicCounts,
       difficulty: maxDifficulty,
@@ -55,7 +56,7 @@ export class Solver {
     steps: SolveStep[],
     counts: Map<string, number>,
     onDifficulty: (d: DifficultyTier) => void,
-  ): Generator<SolveStep> {
+  ): Generator<SolveStep, string | undefined> {
     let progress = true;
     while (progress && steps.length < this.maxSteps) {
       progress = false;
@@ -69,15 +70,32 @@ export class Solver {
           counts.set(h.id, (counts.get(h.id) ?? 0) + 1);
           onDifficulty(h.difficulty);
           yield step;
+
+          // Check for empty candidate sets (contradiction)
+          const emptyCell = this.findEmptyCell();
+          if (emptyCell) {
+            return `Contradiction: R${emptyCell.row + 1}C${emptyCell.col + 1} has no candidates after ${h.id}`;
+          }
+
           progress = true;
           break;
         }
       }
     }
+    return undefined;
   }
 
   private isSolved(): boolean {
     return this.grid.getAllCells().every(c => c.value !== null);
+  }
+
+  private findEmptyCell(): { row: number; col: number } | null {
+    for (const cell of this.grid.getAllCells()) {
+      if (cell.value === null && cell.candidates.count() === 0) {
+        return cell.position;
+      }
+    }
+    return null;
   }
 
   private applyStep(step: SolveStep): void {

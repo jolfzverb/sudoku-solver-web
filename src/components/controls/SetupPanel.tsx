@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { usePuzzle } from '../../state/PuzzleContext';
 import { useSolverRunner } from '../../hooks/useSolverRunner';
-import { VariantRegistry, GridSnapshot, CellSnapshot } from '@sudoku/solver-engine';
+import { GridSnapshot, CellSnapshot, CellPosition } from '@sudoku/solver-engine';
 import { EditMode, UserConstraint } from '../../state/puzzleReducer';
 
 const SIZES = [4, 6, 9, 16];
@@ -18,18 +18,17 @@ export function constraintLabel(c: UserConstraint): string {
     case 'thermo': return `Thermo (${c.cells.length} cells)`;
     case 'cage': return `Cage =${c.sum} (${c.cells.length} cells)`;
     case 'arrow': return `Arrow (${c.cells.length} cells)`;
+    case 'diagonal': return c.id.includes('main') ? 'Main Diagonal' : 'Anti Diagonal';
   }
 }
 
 interface PuzzleData {
-  variant: string;
   size: number;
   givens: string;
   constraints: Array<{ type: string; cells: number[][]; sum?: number }>;
 }
 
 function serializePuzzle(
-  variant: string,
   size: number,
   grid: GridSnapshot,
   constraints: UserConstraint[],
@@ -43,7 +42,6 @@ function serializePuzzle(
   }
 
   const data: PuzzleData = {
-    variant,
     size,
     givens,
     constraints: constraints.map(c => ({
@@ -57,14 +55,13 @@ function serializePuzzle(
 }
 
 function deserializePuzzle(json: string): {
-  variant: string;
   size: number;
   grid: GridSnapshot;
   constraints: UserConstraint[];
 } {
-  const data: PuzzleData = JSON.parse(json);
+  const data = JSON.parse(json) as PuzzleData & { variant?: string };
 
-  if (!data.variant || !data.size || !data.givens) {
+  if (!data.size || !data.givens) {
     throw new Error('Invalid puzzle format');
   }
 
@@ -90,26 +87,29 @@ function deserializePuzzle(json: string): {
   let idCounter = 0;
   const constraints: UserConstraint[] = (data.constraints ?? []).map(c => ({
     id: `imported-${c.type}-${++idCounter}`,
-    type: c.type as 'thermo' | 'cage' | 'arrow',
+    type: c.type as UserConstraint['type'],
     cells: c.cells.map(([row, col]) => ({ row, col })),
     ...(c.sum !== undefined ? { sum: c.sum } : {}),
   }));
 
   return {
-    variant: data.variant,
     size,
     grid: { cells, size },
     constraints,
   };
 }
 
+function makeDiagonalCells(size: number, type: 'main' | 'anti'): CellPosition[] {
+  const cells: CellPosition[] = [];
+  for (let i = 0; i < size; i++) {
+    cells.push({ row: i, col: type === 'main' ? i : size - 1 - i });
+  }
+  return cells;
+}
+
 export function SetupPanel() {
   const { state: puzzle, dispatch } = usePuzzle();
   const { initSolver, stepOnce, solveAll, reset, isSolving, isSolved } = useSolverRunner();
-
-  const variants = VariantRegistry.getAll();
-  const currentVariant = variants.find(v => v.name === puzzle.variant);
-  const supportedSizes = currentVariant?.supportedSizes ?? SIZES;
 
   const [copyLabel, setCopyLabel] = useState('Copy');
 
@@ -117,8 +117,11 @@ export function SetupPanel() {
   const isConstraintMode = puzzle.editMode !== 'digit';
   const hasPending = puzzle.pendingCells.length > 0;
 
+  const hasMainDiag = puzzle.constraints.some(c => c.type === 'diagonal' && c.id.includes('main'));
+  const hasAntiDiag = puzzle.constraints.some(c => c.type === 'diagonal' && c.id.includes('anti'));
+
   const handleCopy = () => {
-    const json = serializePuzzle(puzzle.variant, puzzle.size, puzzle.grid, puzzle.constraints);
+    const json = serializePuzzle(puzzle.size, puzzle.grid, puzzle.constraints);
     navigator.clipboard.writeText(json).then(() => {
       setCopyLabel('Copied!');
       setTimeout(() => setCopyLabel('Copy'), 1500);
@@ -128,12 +131,18 @@ export function SetupPanel() {
   const handleImport = async () => {
     try {
       const text = await navigator.clipboard.readText();
-      const { variant, size, grid, constraints } = deserializePuzzle(text);
-      dispatch({ type: 'LOAD_PUZZLE', variant, size, grid, constraints });
+      const { size, grid, constraints } = deserializePuzzle(text);
+      dispatch({ type: 'LOAD_PUZZLE', size, grid, constraints });
       dispatch({ type: 'SET_ERROR', error: null });
     } catch (e) {
       dispatch({ type: 'SET_ERROR', error: `Import failed: ${(e as Error).message}` });
     }
+  };
+
+  const addDiagonal = (diagType: 'main' | 'anti') => {
+    const id = `diagonal-${diagType}`;
+    const cells = makeDiagonalCells(puzzle.size, diagType);
+    dispatch({ type: 'ADD_CONSTRAINT', constraint: { id, type: 'diagonal', cells } });
   };
 
   return (
@@ -142,25 +151,13 @@ export function SetupPanel() {
       <div className="setup-section">
         <h3>Settings</h3>
         <div className="setting-row">
-          <label>Variant:</label>
-          <select
-            value={puzzle.variant}
-            onChange={e => dispatch({ type: 'SET_VARIANT', variant: e.target.value })}
-            disabled={!isSetup}
-          >
-            {variants.map(v => (
-              <option key={v.name} value={v.name}>{v.displayName}</option>
-            ))}
-          </select>
-        </div>
-        <div className="setting-row">
           <label>Size:</label>
           <select
             value={puzzle.size}
             onChange={e => dispatch({ type: 'SET_SIZE', size: parseInt(e.target.value) })}
             disabled={!isSetup}
           >
-            {supportedSizes.map(s => (
+            {SIZES.map(s => (
               <option key={s} value={s}>{s}x{s}</option>
             ))}
           </select>
@@ -191,6 +188,28 @@ export function SetupPanel() {
                 {label}
               </button>
             ))}
+          </div>
+
+          {/* Diagonal toggles */}
+          <div className="button-row" style={{ marginTop: '0.5rem' }}>
+            <button
+              className={`btn btn-sm ${hasMainDiag ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => hasMainDiag
+                ? dispatch({ type: 'REMOVE_CONSTRAINT', id: 'diagonal-main' })
+                : addDiagonal('main')
+              }
+            >
+              Main Diagonal
+            </button>
+            <button
+              className={`btn btn-sm ${hasAntiDiag ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => hasAntiDiag
+                ? dispatch({ type: 'REMOVE_CONSTRAINT', id: 'diagonal-anti' })
+                : addDiagonal('anti')
+              }
+            >
+              Anti Diagonal
+            </button>
           </div>
 
           {isConstraintMode && (

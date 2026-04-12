@@ -75,6 +75,21 @@ export function GridView({
         );
       })}
 
+      {/* Diagonal overlays */}
+      {constraints.filter(c => c.type === 'diagonal').map(diag => (
+        <line
+          key={diag.id}
+          x1={THICK + diag.cells[0].col * CELL_SIZE + CELL_SIZE / 2}
+          y1={THICK + diag.cells[0].row * CELL_SIZE + CELL_SIZE / 2}
+          x2={THICK + diag.cells[diag.cells.length - 1].col * CELL_SIZE + CELL_SIZE / 2}
+          y2={THICK + diag.cells[diag.cells.length - 1].row * CELL_SIZE + CELL_SIZE / 2}
+          stroke="#e53935"
+          strokeWidth={1.5}
+          opacity={0.5}
+          style={{ pointerEvents: 'none' }}
+        />
+      ))}
+
       {/* Killer cage overlays */}
       {constraints.filter(c => c.type === 'cage').map(cage => (
         <CageOverlay key={cage.id} cage={cage} />

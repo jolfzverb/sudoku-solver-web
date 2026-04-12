@@ -32,7 +32,5 @@ export interface CellSnapshot {
 
 export interface PuzzleData {
   readonly size: number;
-  readonly variant: string;
   readonly givens: ReadonlyArray<{ position: CellPosition; digit: number }>;
-  readonly extraData?: Record<string, unknown>;
 }

@@ -34,7 +34,10 @@ export function ReportPanel() {
 
       {state.solveResult && (
         <div className="solve-summary">
-          <h3>{state.solveResult.solved ? 'Solved!' : 'Could not solve'}</h3>
+          <h3>{state.solveResult.solved ? 'Solved!' : state.solveResult.error ? 'Error' : 'Could not solve'}</h3>
+          {state.solveResult.error && (
+            <p className="step-eliminations">{state.solveResult.error}</p>
+          )}
           <table className="summary-table">
             <tbody>
               <tr><td>Difficulty</td><td>{state.solveResult.difficulty}</td></tr>
