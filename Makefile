@@ -1,4 +1,4 @@
-.PHONY: dev build lint preview install
+.PHONY: dev build lint preview install test
 
 install:
 	npm install
@@ -14,3 +14,6 @@ lint:
 
 preview:
 	npx vite preview
+
+test:
+	npm test

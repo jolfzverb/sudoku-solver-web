@@ -84,10 +84,12 @@ function analyzeCage(grid: Grid, cage: CageSumConstraint): SolveStep | null {
     if (step) return step;
   }
 
-  // Hidden subsets on effective candidates
-  for (let size = 2; size <= Math.min(emptyCells.length - 1, 4); size++) {
-    const step = findHiddenSubset(grid, cage, emptyCells, size);
-    if (step) return step;
+  // Hidden subsets on effective candidates — only when exactly one combo remains
+  if (combos.size() === 1) {
+    for (let size = 2; size <= Math.min(emptyCells.length - 1, 4); size++) {
+      const step = findHiddenSubset(grid, cage, emptyCells, size);
+      if (step) return step;
+    }
   }
 
   return null;
