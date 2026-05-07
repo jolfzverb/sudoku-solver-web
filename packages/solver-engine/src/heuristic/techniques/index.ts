@@ -11,6 +11,7 @@ export { ThermoFork } from './ThermoFork';
 export { ThermoFish } from './ThermoFish';
 export { ThermoForcing } from './ThermoForcing';
 export { YWing } from './YWing';
+export { XYChain } from './XYChain';
 export { ParallelThermos } from './ParallelThermos';
 export { ConstraintClaiming } from './ConstraintClaiming';
 export { CageRegionInteraction } from './CageRegionInteraction';

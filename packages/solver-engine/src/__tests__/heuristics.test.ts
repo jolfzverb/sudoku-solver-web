@@ -13,6 +13,7 @@ import { ThermoFork } from '../heuristic/techniques/ThermoFork';
 import { ThermoFish } from '../heuristic/techniques/ThermoFish';
 import { ThermoForcing } from '../heuristic/techniques/ThermoForcing';
 import { YWing } from '../heuristic/techniques/YWing';
+import { XYChain } from '../heuristic/techniques/XYChain';
 import { ParallelThermos } from '../heuristic/techniques/ParallelThermos';
 import { ConstraintClaiming } from '../heuristic/techniques/ConstraintClaiming';
 import { TurbotFish } from '../heuristic/techniques/TurbotFish';
@@ -1404,6 +1405,65 @@ describe('YWing', () => {
     const cs = buildConstraints(grid);
     expect(YWing.apply(grid, cs)).toBeNull();
   });
+});
+
+// ─── XYChain ───────────────────────────────────────────────────
+
+describe('XYChain', () => {
+  it('length-4 chain: pivot R2C5{6,9} eliminates 5 from R1C1', () => {
+    // Minimised from a real puzzle where the standard Y-Wing fails to fire.
+    // Chain: (0,3){5,6} - (1,4){6,9} - (1,2){7,9} - (1,0){5,7}
+    //   shared: 6 (box-0-1) - 9 (row 1) - 7 (row 1)
+    // Endpoints (0,3) and (1,0) both contain 5.
+    // Target (0,0): row 0 ∋ (0,3), col 0 ∋ (1,0) → eliminate 5.
+    const grid = buildGrid(9, {
+      '0,3': { candidates: [5, 6] },
+      '1,4': { candidates: [6, 9] },
+      '1,2': { candidates: [7, 9] },
+      '1,0': { candidates: [5, 7] },
+      '0,0': { candidates: [4, 5] },
+    });
+    const cs = buildConstraints(grid);
+    const step = XYChain.apply(grid, cs);
+
+    expect(step).not.toBeNull();
+    expect(step!.heuristicId).toBe('xy-chain');
+    expect(hasElimination(step!.eliminations, 0, 0, 5)).toBe(true);
+  });
+
+  it('length-5 chain spanning multiple regions', () => {
+    // Chain: (0,0){1,2} - (0,1){2,3} - (0,2){3,4} - (3,2){4,5} - (3,0){5,1}
+    //   shared: 2 (row 0) - 3 (row 0) - 4 (col 2) - 5 (row 3)
+    // Endpoints (0,0) and (3,0) both contain 1.
+    // Target (1,0) {1,7,8}: col 0 sees both endpoints → eliminate 1.
+    const grid = buildGrid(9, {
+      '0,0': { candidates: [1, 2] },
+      '0,1': { candidates: [2, 3] },
+      '0,2': { candidates: [3, 4] },
+      '3,2': { candidates: [4, 5] },
+      '3,0': { candidates: [1, 5] },
+      '1,0': { candidates: [1, 7, 8] },
+    });
+    const cs = buildConstraints(grid);
+    const step = XYChain.apply(grid, cs);
+
+    expect(step).not.toBeNull();
+    expect(step!.heuristicId).toBe('xy-chain');
+    expect(hasElimination(step!.eliminations, 1, 0, 1)).toBe(true);
+  });
+
+  it('returns null when no chain of length ≥ 4 exists', () => {
+    // Only a length-3 (Y-Wing) pattern; XYChain skips it (handled by YWing).
+    const grid = buildGrid(9, {
+      '0,0': { candidates: [1, 2] },
+      '0,2': { candidates: [1, 3] },
+      '2,0': { candidates: [2, 3] },
+      '2,2': { candidates: [3, 5, 6] },
+    });
+    const cs = buildConstraints(grid);
+    expect(XYChain.apply(grid, cs)).toBeNull();
+  });
+
 });
 
 // ─── ParallelThermos ───────────────────────────────────────────
