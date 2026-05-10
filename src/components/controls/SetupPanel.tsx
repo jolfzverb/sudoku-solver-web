@@ -233,6 +233,11 @@ export function SetupPanel() {
                     min={1}
                     value={puzzle.pendingCageSum ?? ''}
                     onChange={e => dispatch({ type: 'SET_CAGE_SUM', sum: parseInt(e.target.value) || 0 })}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && puzzle.pendingCells.length >= 1 && puzzle.pendingCageSum && puzzle.pendingCageSum > 0) {
+                        dispatch({ type: 'FINISH_CONSTRAINT' });
+                      }
+                    }}
                     className="cage-sum-input"
                     autoFocus
                   />
@@ -242,7 +247,7 @@ export function SetupPanel() {
                 <button
                   className="btn btn-sm btn-primary"
                   onClick={() => dispatch({ type: 'FINISH_CONSTRAINT' })}
-                  disabled={puzzle.pendingCells.length < 2}
+                  disabled={puzzle.pendingCells.length < (puzzle.editMode === 'cage' ? 1 : 2)}
                 >
                   Confirm
                 </button>

@@ -103,8 +103,9 @@ export function puzzleReducer(state: PuzzleState, action: PuzzleAction): PuzzleS
     case 'SET_CAGE_SUM':
       return { ...state, pendingCageSum: action.sum };
     case 'FINISH_CONSTRAINT': {
-      if (state.pendingCells.length < 2) return state;
       const constraintType = state.editMode as 'thermo' | 'cage' | 'arrow';
+      const minCells = constraintType === 'cage' ? 1 : 2;
+      if (state.pendingCells.length < minCells) return state;
       if (constraintType === 'cage' && (state.pendingCageSum === null || state.pendingCageSum <= 0)) return state;
       const newConstraint: UserConstraint = {
         id: `user-${constraintType}-${++constraintIdCounter}`,

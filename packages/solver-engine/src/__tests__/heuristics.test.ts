@@ -629,6 +629,22 @@ describe('ThermometerConstraint', () => {
 // ─── CageSumConstraint ─────────────────────────────────────────
 
 describe('CageSumConstraint', () => {
+  it('single-cell cage forces the cell to its target sum', () => {
+    // 1-cell cage sum=5 on cell (0,0) with full candidates → only 5 survives
+    const grid = buildGrid(9, {
+      '0,0': { candidates: [1, 2, 3, 4, 5, 6, 7, 8, 9] },
+    });
+    const cs = new ConstraintSet();
+    cs.add(new CageSumConstraint('cage-single', [{ row: 0, col: 0 }], 5));
+    const step = ConstraintElimination.apply(grid, cs);
+
+    expect(step).not.toBeNull();
+    for (const d of [1, 2, 3, 4, 6, 7, 8, 9]) {
+      expect(hasElimination(step!.eliminations, 0, 0, d)).toBe(true);
+    }
+    expect(hasElimination(step!.eliminations, 0, 0, 5)).toBe(false);
+  });
+
   it('eliminates candidates exceeding remaining sum', () => {
     // 2-cell cage sum=5, one cell placed as 2 → remaining=3
     // Other cell has {1,2,3,4,5} → 4 and 5 exceed remaining, 2 is duplicate
