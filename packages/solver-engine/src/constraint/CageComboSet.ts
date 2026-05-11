@@ -1,3 +1,6 @@
+import { CellPosition } from '../model/types';
+import { Grid } from '../model/Grid';
+
 /**
  * Tracks the set of valid digit combinations for a killer cage.
  * Provides filtering methods for heuristics to narrow down possibilities.
@@ -102,4 +105,55 @@ function enumerate(
     enumerate(available, i + 1, count - 1, target - d, current, results);
     current.pop();
   }
+}
+
+export interface CageCombosResult {
+  placedDigits: Set<number>;
+  emptyCells: Array<{ pos: CellPosition; candidates: number[] }>;
+  combos: CageComboSet;
+}
+
+/**
+ * Compute valid digit combos for a pure-killer-cage-shaped set of cells:
+ * all cells take distinct positive-sign digits summing to `targetSum`. The
+ * caller is responsible for normalising sign (for all-`-1` constraints,
+ * pass the negated `targetSum`).
+ */
+export function computePureKillerCageCombos(
+  cells: ReadonlyArray<CellPosition>,
+  targetSum: number,
+  grid: Grid,
+): CageCombosResult {
+  const placedDigits = new Set<number>();
+  let placedSum = 0;
+  const emptyCells: Array<{ pos: CellPosition; candidates: number[] }> = [];
+
+  for (const pos of cells) {
+    const cell = grid.getCell(pos);
+    if (cell.value !== null) {
+      placedDigits.add(cell.value);
+      placedSum += cell.value;
+    } else {
+      emptyCells.push({ pos, candidates: cell.candidates.values() });
+    }
+  }
+
+  if (emptyCells.length === 0) {
+    return { placedDigits, emptyCells, combos: new CageComboSet([]) };
+  }
+
+  const candidateUnion = new Set<number>();
+  for (const { candidates } of emptyCells) {
+    for (const d of candidates) {
+      if (!placedDigits.has(d)) candidateUnion.add(d);
+    }
+  }
+
+  const available: number[] = [];
+  for (let d = 1; d <= grid.size; d++) {
+    if (candidateUnion.has(d)) available.push(d);
+  }
+
+  const combos = CageComboSet.compute(available, emptyCells.length, targetSum - placedSum);
+  return { placedDigits, emptyCells, combos };
 }

@@ -1,18 +1,36 @@
 import { CellPosition } from '../model/types';
 import { Grid } from '../model/Grid';
-import { Constraint, Violation, Elimination } from './types';
-import { CageComboSet } from './CageComboSet';
+import { SumConstraint, Violation, Elimination } from './types';
+import { CageComboSet, computePureKillerCageCombos } from './CageComboSet';
 
-export class CageSumConstraint implements Constraint {
+export class CageSumConstraint implements SumConstraint {
   readonly id: string;
   readonly type = 'cage-sum';
   readonly affectedCells: ReadonlyArray<CellPosition>;
   readonly targetSum: number;
+  readonly signedCells: ReadonlyArray<{ pos: CellPosition; sign: 1 | -1 }>;
+  readonly distinctEdges: ReadonlyArray<readonly [number, number]>;
 
   constructor(id: string, cells: CellPosition[], targetSum: number) {
     this.id = id;
     this.affectedCells = cells;
     this.targetSum = targetSum;
+    this.signedCells = cells.map(p => ({ pos: p, sign: 1 as const }));
+    const edges: [number, number][] = [];
+    for (let i = 0; i < cells.length; i++) {
+      for (let j = i + 1; j < cells.length; j++) edges.push([i, j]);
+    }
+    this.distinctEdges = edges;
+  }
+
+  /**
+   * A `CageSumConstraint` is constructed with all signs `+1` and a full
+   * clique, which is the canonical "pure killer cage" — return `true`.
+   * The `SumConstraint` predicate also accepts all-`-1` (equivalent under
+   * sign flip); both forms are honoured by consumers via this method.
+   */
+  isPureKillerCage(): boolean {
+    return true;
   }
 
   validate(grid: Grid): Violation[] {
@@ -53,38 +71,7 @@ export class CageSumConstraint implements Constraint {
     emptyCells: Array<{ pos: CellPosition; candidates: number[] }>;
     combos: CageComboSet;
   } {
-    const placedDigits = new Set<number>();
-    let placedSum = 0;
-    const emptyCells: Array<{ pos: CellPosition; candidates: number[] }> = [];
-
-    for (const pos of this.affectedCells) {
-      const cell = grid.getCell(pos);
-      if (cell.value !== null) {
-        placedDigits.add(cell.value);
-        placedSum += cell.value;
-      } else {
-        emptyCells.push({ pos, candidates: cell.candidates.values() });
-      }
-    }
-
-    if (emptyCells.length === 0) {
-      return { placedDigits, emptyCells, combos: new CageComboSet([]) };
-    }
-
-    const candidateUnion = new Set<number>();
-    for (const { candidates } of emptyCells) {
-      for (const d of candidates) {
-        if (!placedDigits.has(d)) candidateUnion.add(d);
-      }
-    }
-
-    const available: number[] = [];
-    for (let d = 1; d <= grid.size; d++) {
-      if (candidateUnion.has(d)) available.push(d);
-    }
-
-    const combos = CageComboSet.compute(available, emptyCells.length, this.targetSum - placedSum);
-    return { placedDigits, emptyCells, combos };
+    return computePureKillerCageCombos(this.affectedCells, this.targetSum, grid);
   }
 
   getDirectEliminations(grid: Grid): Elimination[] {

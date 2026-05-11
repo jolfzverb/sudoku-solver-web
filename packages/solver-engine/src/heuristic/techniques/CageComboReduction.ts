@@ -1,10 +1,14 @@
 import { Grid } from '../../model/Grid';
 import { ConstraintSet } from '../../constraint/ConstraintSet';
 import { CageSumConstraint } from '../../constraint/CageSumConstraint';
+import { VirtualSumConstraint } from '../../constraint/VirtualSumConstraint';
 import { Heuristic, SolveStep } from '../types';
 import { CellPosition, Region } from '../../model/types';
 import { Elimination } from '../../constraint/types';
 import { formatRegion } from '../utils';
+import { getVirtualCages } from '../VirtualCageRegistry';
+
+type Cage = CageSumConstraint | VirtualSumConstraint;
 
 /**
  * Cage Combo Reduction heuristic.
@@ -26,7 +30,9 @@ export const CageComboReduction: Heuristic = {
   difficulty: 'intermediate',
 
   apply(grid: Grid, constraints: ConstraintSet): SolveStep | null {
-    const cages = constraints.getConstraintsByType('cage-sum') as CageSumConstraint[];
+    const userCages = constraints.getConstraintsByType('cage-sum') as CageSumConstraint[];
+    const virtualPure = getVirtualCages(grid, constraints).filter(v => v.isPureKillerCage());
+    const cages: Cage[] = [...userCages, ...virtualPure];
     if (cages.length === 0) return null;
 
     const regions = grid.getRegions().filter(r =>
@@ -44,7 +50,7 @@ export const CageComboReduction: Heuristic = {
 
 function analyzeCage(
   grid: Grid,
-  cage: CageSumConstraint,
+  cage: Cage,
   regions: ReadonlyArray<Region>,
 ): SolveStep | null {
   const { placedDigits, emptyCells, combos: baseCombos } = cage.computeCombos(grid);
@@ -138,7 +144,7 @@ function analyzeCage(
   return {
     heuristicId: 'cage-combo-reduction',
     description:
-      `Cage Combo Reduction: cage ${cage.id} (sum=${cage.targetSum}) — `
+      `Cage Combo Reduction: ${describeCage(cage)} — `
       + reasons.join('; ')
       + ` → valid combos: ${combos.getCombos().map(c => `{${c.join(',')}}`).join(', ')}`,
     placements: [],
@@ -155,4 +161,9 @@ function analyzeCage(
     ],
     snapshotBefore: grid.snapshot(),
   };
+}
+
+function describeCage(cage: Cage): string {
+  if (cage.type === 'cage-sum') return `cage ${cage.id} (sum=${cage.targetSum})`;
+  return `virtual ${cage.id} [${(cage as VirtualSumConstraint).source}]`;
 }

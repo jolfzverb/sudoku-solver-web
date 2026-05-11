@@ -18,4 +18,6 @@ export { CageRegionInteraction } from './CageRegionInteraction';
 export { CageComboReduction } from './CageComboReduction';
 export { CageForcing } from './CageForcing';
 export { CageSubsets } from './CageSubsets';
+export { CageLockedCandidates } from './CageLockedCandidates';
+export { CageInniesOuties } from './CageInniesOuties';
 export { TurbotFish } from './TurbotFish';
