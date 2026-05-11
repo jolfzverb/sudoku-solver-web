@@ -24,6 +24,8 @@ import { CageRegionInteraction } from './techniques/CageRegionInteraction';
 import { CageComboReduction } from './techniques/CageComboReduction';
 import { CageForcing } from './techniques/CageForcing';
 import { CageSubsets } from './techniques/CageSubsets';
+import { CageLockedCandidates } from './techniques/CageLockedCandidates';
+import { CageInniesOuties } from './techniques/CageInniesOuties';
 
 // Register all built-in heuristics in priority order
 HeuristicRegistry.register(NakedSingle);
@@ -32,6 +34,8 @@ HeuristicRegistry.register(ConstraintElimination);
 HeuristicRegistry.register(CageRegionInteraction);
 HeuristicRegistry.register(CageComboReduction);
 HeuristicRegistry.register(CageSubsets);
+HeuristicRegistry.register(CageLockedCandidates);
+HeuristicRegistry.register(CageInniesOuties);
 HeuristicRegistry.register(NakedPair);
 HeuristicRegistry.register(HiddenPair);
 HeuristicRegistry.register(HiddenTriple);

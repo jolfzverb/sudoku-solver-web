@@ -1,7 +1,10 @@
-export type { Constraint, Elimination, Violation } from './types';
+export type { Constraint, SumConstraint, Elimination, Violation } from './types';
 export { ConstraintSet } from './ConstraintSet';
 export { RegionConstraint } from './RegionConstraint';
 export { CageSumConstraint } from './CageSumConstraint';
 export { CageComboSet } from './CageComboSet';
+export { VirtualSumConstraint } from './VirtualSumConstraint';
+export { enumerateSumAssignments } from './SumEnumeration';
+export type { SumEnumerationResult } from './SumEnumeration';
 export { ThermometerConstraint } from './ThermometerConstraint';
 export { ArrowSumConstraint } from './ArrowSumConstraint';

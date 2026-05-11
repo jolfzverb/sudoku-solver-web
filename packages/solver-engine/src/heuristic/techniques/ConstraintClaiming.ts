@@ -3,6 +3,7 @@ import { ConstraintSet } from '../../constraint/ConstraintSet';
 import { Heuristic, SolveStep } from '../types';
 import { CellPosition, Region } from '../../model/types';
 import { Constraint, Elimination } from '../../constraint/types';
+import { getVirtualCages } from '../VirtualCageRegistry';
 import { formatRegion } from '../utils';
 
 /**
@@ -31,9 +32,17 @@ export const ConstraintClaiming: Heuristic = {
   apply(grid: Grid, constraints: ConstraintSet): SolveStep | null {
     const boxRegions = grid.getRegions().filter(r => r.type === 'box');
 
+    // User-declared all-distinct constraints + virtual pure-killer cages
+    // (those guarantee all-distinct values across their cells too).
+    const candidates: Constraint[] = [];
     for (const constraint of constraints.getAll()) {
-      if (!DISTINCT_TYPES.has(constraint.type)) continue;
+      if (DISTINCT_TYPES.has(constraint.type)) candidates.push(constraint);
+    }
+    for (const v of getVirtualCages(grid, constraints)) {
+      if (v.isPureKillerCage()) candidates.push(v);
+    }
 
+    for (const constraint of candidates) {
       for (const box of boxRegions) {
         const step = analyzeConstraintBox(grid, constraint, box);
         if (step) return step;
@@ -178,6 +187,9 @@ function tryLockedSet(
   if (constraint.type === 'cage-sum') {
     const sum = (constraint as unknown as { targetSum: number }).targetSum;
     constraintLabel = `cage sum=${sum} at ${fmt(topLeft)}`;
+  } else if (constraint.type === 'virtual-sum') {
+    const src = (constraint as unknown as { source: string }).source;
+    constraintLabel = `virtual ${constraint.id} [${src}] at ${fmt(topLeft)}`;
   } else if (constraint.type === 'thermo') {
     constraintLabel = `thermo (${constraint.affectedCells.length} cells) at ${fmt(topLeft)}`;
   } else {

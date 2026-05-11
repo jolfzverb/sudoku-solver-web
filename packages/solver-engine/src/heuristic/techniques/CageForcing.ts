@@ -1,9 +1,13 @@
 import { Grid } from '../../model/Grid';
 import { ConstraintSet } from '../../constraint/ConstraintSet';
 import { CageSumConstraint } from '../../constraint/CageSumConstraint';
+import { VirtualSumConstraint } from '../../constraint/VirtualSumConstraint';
 import { Heuristic, SolveStep } from '../types';
 import { CellPosition } from '../../model/types';
 import { Elimination } from '../../constraint/types';
+import { getVirtualCages } from '../VirtualCageRegistry';
+
+type Cage = CageSumConstraint | VirtualSumConstraint;
 
 /**
  * Cage Forcing heuristic.
@@ -17,6 +21,12 @@ import { Elimination } from '../../constraint/types';
  * sees both cage cells. Combo {7,8} → X loses 7,8 → empty → excluded.
  * Only {6,9} survives.
  */
+
+function describeCage(cage: Cage): string {
+  if (cage.type === 'cage-sum') return `cage ${cage.id} (sum=${cage.targetSum})`;
+  const v = cage as VirtualSumConstraint;
+  return `virtual ${cage.id} [${v.source}]`;
+}
 
 function cellsSeeEachOther(grid: Grid, a: CellPosition, b: CellPosition): boolean {
   if (a.row === b.row && a.col === b.col) return false;
@@ -32,7 +42,9 @@ export const CageForcing: Heuristic = {
   difficulty: 'advanced',
 
   apply(grid: Grid, constraints: ConstraintSet): SolveStep | null {
-    const cages = constraints.getConstraintsByType('cage-sum') as CageSumConstraint[];
+    const userCages = constraints.getConstraintsByType('cage-sum') as CageSumConstraint[];
+    const virtualPure = getVirtualCages(grid, constraints).filter(v => v.isPureKillerCage());
+    const cages: Cage[] = [...userCages, ...virtualPure];
     if (cages.length === 0) return null;
 
     for (const cage of cages) {
@@ -44,7 +56,7 @@ export const CageForcing: Heuristic = {
   },
 };
 
-function analyzeCage(grid: Grid, cage: CageSumConstraint): SolveStep | null {
+function analyzeCage(grid: Grid, cage: Cage): SolveStep | null {
   const { placedDigits, emptyCells, combos } = cage.computeCombos(grid);
   if (emptyCells.length === 0 || combos.size() < 2) return null;
 
@@ -147,7 +159,7 @@ function analyzeCage(grid: Grid, cage: CageSumConstraint): SolveStep | null {
   return {
     heuristicId: 'cage-forcing',
     description:
-      `Cage Forcing: cage ${cage.id} (sum=${cage.targetSum}) — `
+      `Cage Forcing: ${describeCage(cage)} — `
       + removedCombos.join('; ')
       + ` → remaining: ${validCombos.map(c => `{${c.join(',')}}`).join(', ')}`,
     placements: [],

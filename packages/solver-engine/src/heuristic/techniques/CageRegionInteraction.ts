@@ -1,10 +1,20 @@
 import { Grid } from '../../model/Grid';
 import { ConstraintSet } from '../../constraint/ConstraintSet';
 import { CageSumConstraint } from '../../constraint/CageSumConstraint';
+import { VirtualSumConstraint } from '../../constraint/VirtualSumConstraint';
 import { Heuristic, SolveStep } from '../types';
 import { CellPosition, Region } from '../../model/types';
 import { Elimination } from '../../constraint/types';
 import { formatRegion } from '../utils';
+import { getVirtualCages } from '../VirtualCageRegistry';
+
+type Cage = CageSumConstraint | VirtualSumConstraint;
+
+function effectiveTarget(cage: Cage): number {
+  if (cage.type === 'cage-sum') return cage.targetSum;
+  const v = cage as VirtualSumConstraint;
+  return v.signedCells[0].sign === 1 ? v.targetSum : -v.targetSum;
+}
 
 /**
  * Cage Region Interaction heuristic.
@@ -31,7 +41,9 @@ export const CageRegionInteraction: Heuristic = {
   difficulty: 'intermediate',
 
   apply(grid: Grid, constraints: ConstraintSet): SolveStep | null {
-    const cages = constraints.getConstraintsByType('cage-sum') as CageSumConstraint[];
+    const userCages = constraints.getConstraintsByType('cage-sum') as CageSumConstraint[];
+    const virtualPure = getVirtualCages(grid, constraints).filter(v => v.isPureKillerCage());
+    const cages: Cage[] = [...userCages, ...virtualPure];
     if (cages.length === 0) return null;
 
     const regions = grid.getRegions().filter(r =>
@@ -50,19 +62,27 @@ export const CageRegionInteraction: Heuristic = {
 function analyzeRegion(
   grid: Grid,
   region: Region,
-  allCages: CageSumConstraint[],
+  allCages: Cage[],
 ): SolveStep | null {
   const regionCellSet = new Set(region.cells.map(p => `${p.row},${p.col}`));
 
-  // Find cages fully contained in this region with at least one empty cell
-  const regionCages: CageSumConstraint[] = [];
-  for (const cage of allCages) {
-    if (cage.affectedCells.every(p => regionCellSet.has(`${p.row},${p.col}`))) {
-      if (cage.affectedCells.some(p => grid.getCell(p).value === null)) {
-        regionCages.push(cage);
-      }
+  // Find cages fully contained in this region with at least one empty cell.
+  // For multi-cage compatibility analysis to be correct, the included cages
+  // must have pairwise-disjoint cells. User killer cages are disjoint by
+  // construction; virtuals can overlap with user cages or each other —
+  // include each only if it doesn't share a cell with anything already in.
+  const regionCages: Cage[] = [];
+  const includedCellKeys = new Set<string>();
+  const tryInclude = (cage: Cage): void => {
+    if (!cage.affectedCells.every(p => regionCellSet.has(`${p.row},${p.col}`))) return;
+    if (!cage.affectedCells.some(p => grid.getCell(p).value === null)) return;
+    for (const p of cage.affectedCells) {
+      if (includedCellKeys.has(`${p.row},${p.col}`)) return;
     }
-  }
+    regionCages.push(cage);
+    for (const p of cage.affectedCells) includedCellKeys.add(`${p.row},${p.col}`);
+  };
+  for (const cage of allCages) tryInclude(cage);
 
   if (regionCages.length === 0) return null;
 
@@ -98,7 +118,7 @@ function analyzeRegion(
     }
 
     const combos: number[][] = [];
-    findCombos(cageAvailable, 0, emptyCount, cage.targetSum - placedSum, [], combos);
+    findCombos(cageAvailable, 0, emptyCount, effectiveTarget(cage) - placedSum, [], combos);
     if (combos.length === 0) return null; // unsatisfiable
     cageCombos.push(combos);
   }

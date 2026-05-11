@@ -1,9 +1,13 @@
 import { Grid } from '../../model/Grid';
 import { ConstraintSet } from '../../constraint/ConstraintSet';
 import { CageSumConstraint } from '../../constraint/CageSumConstraint';
+import { VirtualSumConstraint } from '../../constraint/VirtualSumConstraint';
 import { Heuristic, SolveStep } from '../types';
 import { CellPosition } from '../../model/types';
 import { Elimination } from '../../constraint/types';
+import { getVirtualCages } from '../VirtualCageRegistry';
+
+type Cage = CageSumConstraint | VirtualSumConstraint;
 
 /**
  * Cage Subsets heuristic (Naked/Hidden pairs/triples/quads within a cage).
@@ -30,7 +34,9 @@ export const CageSubsets: Heuristic = {
   difficulty: 'intermediate',
 
   apply(grid: Grid, constraints: ConstraintSet): SolveStep | null {
-    const cages = constraints.getConstraintsByType('cage-sum') as CageSumConstraint[];
+    const userCages = constraints.getConstraintsByType('cage-sum') as CageSumConstraint[];
+    const virtualPure = getVirtualCages(grid, constraints).filter(v => v.isPureKillerCage());
+    const cages: Cage[] = [...userCages, ...virtualPure];
 
     for (const cage of cages) {
       const step = analyzeCage(grid, cage);
@@ -47,7 +53,7 @@ interface CageCell {
   effectiveCandidates: number[];
 }
 
-function analyzeCage(grid: Grid, cage: CageSumConstraint): SolveStep | null {
+function analyzeCage(grid: Grid, cage: Cage): SolveStep | null {
   const { combos } = cage.computeCombos(grid);
   if (combos.isEmpty()) return null;
 
@@ -140,7 +146,7 @@ function permute(arr: number[], start: number, cb: (perm: number[]) => void): vo
 
 function findNakedSubset(
   grid: Grid,
-  cage: CageSumConstraint,
+  cage: Cage,
   emptyCells: CageCell[],
   size: number,
 ): SolveStep | null {
@@ -177,7 +183,7 @@ function findNakedSubset(
 
 function findHiddenSubset(
   grid: Grid,
-  cage: CageSumConstraint,
+  cage: Cage,
   emptyCells: CageCell[],
   size: number,
 ): SolveStep | null {
@@ -222,7 +228,7 @@ function findHiddenSubset(
 }
 
 function buildStep(
-  cage: CageSumConstraint,
+  cage: Cage,
   label: string,
   elims: Elimination[],
   emptyCells: CageCell[],
@@ -233,12 +239,15 @@ function buildStep(
   const triggerCells = triggerIndices.size > 0
     ? [...triggerIndices].map(i => emptyCells[i].pos)
     : emptyCells.map(c => c.pos);
+  const cageLabel = cage.type === 'cage-sum'
+    ? `cage sum=${cage.targetSum}`
+    : `virtual ${cage.id} [${(cage as VirtualSumConstraint).source}]`;
 
   return {
     heuristicId: 'cage-subsets',
     description:
       `Cage Subsets: ${label} at [${triggerCells.map(fmt).join(',')}] `
-      + `in cage sum=${cage.targetSum}`,
+      + `in ${cageLabel}`,
     placements: [],
     eliminations: elims,
     highlights: [
